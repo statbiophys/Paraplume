@@ -97,3 +97,13 @@ class EarlyStopping:
             self.val_loss_min = val_loss
             self.counter = 0
             torch.save(model.state_dict(), self.path.as_posix())
+
+class MLP_AA(nn.Module):
+    def __init__(self):
+        super(MLP, self).__init__()
+        self.l1 = nn.Linear(1024, 1000)
+        self.l2 = nn.Linear(1000,1)
+
+    def forward(self, x):
+        x = self.l2(F.relu(self.l1(x)))
+        return torch.sigmoid(x)
