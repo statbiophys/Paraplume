@@ -59,7 +59,6 @@ def create_dictionary(
 def create_embeddings(
         dataset_dict:Dict,
         save_path : Path = Path('/home/gathenes/all_structures/data_high_qual/embeddings_241003.pt'),
-        max_length:int=256,
     ):
     """Create LLM amino acid embeddings.
 
@@ -82,7 +81,7 @@ def create_embeddings(
         paired_sequences,
         add_special_tokens=True,
         padding="max_length",
-        max_length=max_length,
+        max_length=256+3,
         return_tensors="pt",
         return_special_tokens_mask=True,
     )
@@ -94,7 +93,7 @@ def create_embeddings(
     torch.save(residue_embeddings, save_path)
     return residue_embeddings
 
-def create_dataloader(dataset_dict:Dict,residue_embeddings:torch.Tensor, batch_size=10, max_length:int=256)->torch.utils.data.dataloader.DataLoader:
+def create_dataloader(dataset_dict:Dict,residue_embeddings:torch.Tensor, batch_size=10)->torch.utils.data.dataloader.DataLoader:
     """Take dataset_dict and embeddings and return dataloader.
 
     Args:
@@ -105,7 +104,7 @@ def create_dataloader(dataset_dict:Dict,residue_embeddings:torch.Tensor, batch_s
     Returns:
         torch.utils.data.dataloader.DataLoader: Dataloader to use for training.
     """
-    dataset = ParatopeDataset(dataset_dict=dataset_dict, residue_embeddings=residue_embeddings, max_length=max_length)
+    dataset = ParatopeDataset(dataset_dict=dataset_dict, residue_embeddings=residue_embeddings)
     dataset_loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size)
     return dataset_loader
 
@@ -116,28 +115,21 @@ def main(
         help="Path of csv file to use for pdb list.",
         show_default=False,
     ),
-    max_length: int = typer.Option(
-        256, "--max-length", "-mx", help="Max length to use to pad embeddings."
-    ),
     result_folder: Path = typer.Option(
         Path("./result/"), "--result-folder", "-r", help="Where to save results"
-    ),
-    dec:str = typer.Option(
-        "", "--dec", help="Add decorator to saved files."
     ),
     pdbs_only:bool = typer.Option(
         False, "--pdbs-only", help="Use only pdbs."
     ),
-    batch_size:int = typer.Option(
-        10, "--batch-size", "-bs", help="Batch size to use for dataloader. Defaults to 10",
-    )
 ) -> None:
-    result_folder.mkdir(exist_ok=True,parents=True)
+    stem=pdb_list_path.stem
+    save_folder = result_folder/Path(stem)
+    save_folder.mkdir(exist_ok=True,parents=True)
     pdb_dataframe = pd.read_csv(pdb_list_path)
-    dataset_dict = create_dictionary(pdb_dataframe, save_path=result_folder / Path(f"dataset_dict_{dec}.json"), pdbs_only=pdbs_only)
-    residue_embeddings=create_embeddings(dataset_dict=dataset_dict,save_path=result_folder / Path(f'embeddings_{dec}.pt'), max_length=max_length)
-    dataloader = create_dataloader(dataset_dict=dataset_dict, residue_embeddings=residue_embeddings, batch_size=batch_size, max_length=max_length)
-    torch.save(dataloader, result_folder / Path(f'dataloader_{dec}.pkl'))
+    dataset_dict = create_dictionary(pdb_dataframe, save_path=save_folder / Path("dict.json"), pdbs_only=pdbs_only)
+    residue_embeddings=create_embeddings(dataset_dict=dataset_dict,save_path=save_folder / Path("embeddings.pt"))
+    #dataloader = create_dataloader(dataset_dict=dataset_dict, residue_embeddings=residue_embeddings, batch_size=batch_size, max_length=max_length)
+    #torch.save(dataloader, result_folder / Path(f'dataloader_{dec}.pkl'))
 
 if __name__ == "__main__":
     app()

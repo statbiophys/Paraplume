@@ -4,7 +4,8 @@ from pathlib import Path
 import numpy as np
 import torch
 import typer
-from models import CNN, MLP, MLP_AA
+from create_dataset import create_dataloader
+from models import MLP
 from sklearn.metrics import (
     average_precision_score,
     roc_auc_score,
@@ -70,7 +71,7 @@ def main(
         help="Path of model.",
         show_default=False,
     ),
-    test_loader_path: Path = typer.Argument(
+    test_folder_path: Path = typer.Argument(
         ...,
         help="Path of testloader.",
         show_default=False,
@@ -78,31 +79,25 @@ def main(
     model_type: str = typer.Option(
         "MLP", "--model-type", "-m", help="Model to use for training."
     ),
-    result_folder: Path = typer.Option(
-        Path("./result/"), "--result_folder", "-r", help="Where to save results."
-    ),
-    input_dim_x: int = typer.Option(
-        256, "--input-dim-x", help="X dimension of the embedding."
-    ),
-    cdr_pm2:bool=typer.Option(
-        False, "--cdr-pm2", help="Whether to evaluate on just cdrs +- 2 or not. Defaults to False."
-    ),
-    add_reverse:bool=typer.Option(
-        False, "--add-reverse", help="Also add reverse sequences"
+    batch_size:int=typer.Option(
+        10, "--batch-size", "-bs", help="Batch size. Defaults to 10."
     ),
 ) -> None:
+    result_folder=model_path.parents[0]
+    print(result_folder.as_posix())
     args_dict = {
         "model_path": str(model_path),
-        "test_loader_path": str(test_loader_path),
+        "test_folder_path": str(test_folder_path),
         "result_folder": str(result_folder),
-        "cdr-pm2":str(cdr_pm2),
-        "input-dim-x":str(input_dim_x),
     }
+    with open(test_folder_path / Path("dict.json")) as f :
+        dict_test = json.load(f)
+    test_embeddings = torch.load(test_folder_path / Path("embeddings.pt"), weights_only=True)
+    test_loader = create_dataloader(dataset_dict=dict_test, residue_embeddings=test_embeddings, batch_size=batch_size)
+    torch.save(test_loader, result_folder / Path(f'test_dataloader_batchsize_{batch_size}.pkl'))
 
-    result_folder.mkdir(exist_ok=True, parents=True)
-    test_loader = torch.load(test_loader_path)
     if model_type=="MLP":
-        model = MLP_AA()
+        model = MLP()
     else:
         raise ValueError("No model of this name known.")
     print("LOADING MODEL")
@@ -111,8 +106,6 @@ def main(
     outputs_and_labels, auc, ap = test(
         model=model,
         test_loader=test_loader,
-        cdr_pm2=cdr_pm2,
-        add_reverse=add_reverse,
     )
     args_dict["ap"]=ap
     args_dict["auc"]=auc
