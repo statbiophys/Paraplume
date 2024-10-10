@@ -6,7 +6,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import typer
-from models import CNN, MLP, EarlyStopping
+from models import CNN, MLP, MLP_AA, EarlyStopping
 from sklearn.metrics import (
     average_precision_score,
     roc_auc_score,
@@ -24,10 +24,8 @@ def train(
     n_epochs=3,
     model_save_path=Path("/home/gathenes/all_structures/data_high_qual/checkpoint.pt"),
     criterion=nn.BCELoss(),
-    input_dim_x:int=256,
-    cnn=False,
+    cnn:bool=False,
     add_reverse:bool=False,
-
 ):
     # Training loop
     device = torch.device("cpu")
@@ -35,35 +33,24 @@ def train(
     test_loss_list = []
     auc_list = []
     ap_list = []
-
     early_stopping = EarlyStopping(patience=10, path=model_save_path, best_score=0)
     for epoch in range(1, n_epochs + 1):
         train_loss = 0.0
         model.train()
-        for i, (embedding, labels, len_paired,_, _, _, _, _) in enumerate(tqdm(train_loader)):
+        for i, (embedding, labels, _,_, _, _, _, _) in enumerate(tqdm(train_loader)):
             embedding, labels = embedding.to(device), labels.to(device)
-            if cnn:
-                embedding = torch.reshape(embedding, (-1, 1, input_dim_x, 1024))
-            # Make sure you start off with a clean slate by resetting the gradients
+            embedding = embedding.view(256 * 10, 1024)
+            labels=labels.view(256*10)
+            # embedding = (batch_size, 256, 1024)
             optimizer.zero_grad()
             output = model(embedding)
-            # print(output.shape,labels.shape)
+            # output, labels of shape (256,1), (256)
+            output=output.view(256*10)
             loss = criterion(output, labels)
             # Backpropagate the loss and update gradients
             loss.backward()
             optimizer.step()
             train_loss += loss.item() * embedding.size(0)
-
-            if add_reverse:
-                optimizer.zero_grad()
-                embedding_flip = torch.flip(embedding,[1])
-                labels_flip = torch.flip(labels,[1])
-                outputs_flip = model(embedding_flip)
-                loss_flip = criterion(outputs_flip, labels_flip)
-                loss_flip.backward()
-                optimizer.step()
-                train_loss += loss.item() * embedding.size(0)
-
         train_loss /= len(train_loader.dataset)
         train_loss_list.append(train_loss)
         test_loss = 0
@@ -75,21 +62,12 @@ def train(
         with torch.no_grad():
             for embedding, labels, _,_, _, _, _, _ in test_loader:
                 embedding, labels = embedding.to(device), labels.to(device)
-                if cnn:
-                    embedding = torch.reshape(embedding, (-1, 1, input_dim_x, 1024))
+                embedding = embedding.view(256 * 10, 1024)
+                labels=labels.view(256*10)
                 output = model(embedding)
+                output=output.view(256*10)
                 loss = criterion(output, labels)
                 test_loss += loss.item() * embedding.size(0)
-                if add_reverse:
-                    embedding_flip = torch.flip(embedding,[1])
-                    labels_flip = torch.flip(labels,[1])
-                    outputs_flip = model(embedding_flip)
-
-                output_flip = outputs_flip.detach().cpu().numpy()
-                labels_flip = labels_flip.detach().cpu().numpy()
-                all_outputs.extend(output_flip)
-                all_targets.extend(labels_flip)
-
                 output = output.detach().cpu().numpy()
                 labels = labels.detach().cpu().numpy()
                 all_outputs.extend(output)
@@ -103,10 +81,10 @@ def train(
         all_targets = np.array(all_targets)
 
         # Calculate the AUC score
-        auc = roc_auc_score(all_targets[0], all_outputs[0])
+        auc = roc_auc_score(all_targets, all_outputs)
         auc_list.append(auc)
 
-        ap = average_precision_score(all_targets[0], all_outputs[0])
+        ap = average_precision_score(all_targets, all_outputs)
         ap_list.append(ap)
 
         # Calculate the Average Precision score
@@ -202,7 +180,7 @@ def main(
     test_loader = torch.load(test_loader_path)
     cnn = False
     if model_name == "MLP":
-        model = MLP(input_dim_x=input_dim_x, input_dim_y=1024)
+        model = MLP_AA()
     elif model_name == "CNN":
         cnn = True
         model = CNN(input_dim_x=input_dim_x, input_dim_y=1024)

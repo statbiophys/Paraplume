@@ -100,7 +100,7 @@ class EarlyStopping:
 
 class MLP_AA(nn.Module):
     def __init__(self):
-        super(MLP, self).__init__()
+        super(MLP_AA, self).__init__()
         self.l1 = nn.Linear(1024, 1000)
         self.l2 = nn.Linear(1000,1)
 
