@@ -43,7 +43,7 @@ def train(
                 heavy, light = len_heavy[i], len_light[i]
                 ran = list(range(1,heavy+1))+list(range(heavy+2, heavy+light+2))
                 embedding_list.append(embedding[i][ran])
-                label_list.append(labels[i][ran])
+                label_list.append(labels[i][:heavy+light])
             embedding = torch.cat(embedding_list, dim=0)
             labels = torch.cat(label_list, dim=0)
             optimizer.zero_grad()
@@ -71,7 +71,7 @@ def train(
                     heavy, light = len_heavy[i], len_light[i]
                     ran = list(range(1,heavy+1))+list(range(heavy+2, heavy+light+2))
                     embedding_list.append(embedding[i][ran])
-                    label_list.append(labels[i][ran])
+                    label_list.append(labels[i][:heavy+light])
                 embedding = torch.cat(embedding_list, dim=0)
                 labels = torch.cat(label_list, dim=0)
                 output = model(embedding)
@@ -188,7 +188,6 @@ def main(
     result_folder.mkdir(exist_ok=True, parents=True)
     train_loader = torch.load(train_loader_path)
     test_loader = torch.load(test_loader_path)
-    cnn = False
     if model_name == "MLP":
         model = MLP_AA()
     else:

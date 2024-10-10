@@ -4,7 +4,7 @@ from pathlib import Path
 import numpy as np
 import torch
 import typer
-from models import CNN, MLP
+from models import CNN, MLP, MLP_AA
 from sklearn.metrics import (
     average_precision_score,
     roc_auc_score,
@@ -30,51 +30,28 @@ def test(
         for i, (
             embedding,
             labels,
-            len_labels_paired,
-            heavy_indices,
-            light_indices,
-            len_padd_heavy,
-            len_padd_light,
             len_heavy,
+            len_light,
         ) in tqdm(enumerate(test_loader)):
             embedding, labels = embedding.to(device), labels.to(device)
-            embedding_flip=torch.flip(embedding,[1])
+            embedding_list=[]
+            label_list = []
+            for i in range(len_heavy.shape[-1]):
+                heavy, light = len_heavy[i], len_light[i]
+                ran = list(range(1,heavy+1))+list(range(heavy+2, heavy+light+2))
+                embedding_list.append(embedding[i][ran])
+                label_list.append(labels[i][:heavy+light])
+            embedding = torch.cat(embedding_list, dim=0)
+            labels = torch.cat(label_list, dim=0)
             output=model(embedding)
+            output=output.view(-1)
+
             # Convert the tensors to cpu and then to numpy arrays for AUC and ROC calculation
             output = output.detach().cpu().numpy()
             labels = labels.detach().cpu().numpy()
 
-            # Store the outputs and targets for AUC and ROC curve
-            if cdr_pm2:
-                heavy_indices = heavy_indices[0]
-                light_indices = light_indices[0]
-                heavy_indices = heavy_indices[:len_padd_heavy]
-                light_indices = light_indices[:len_padd_light]
-
-                heavy_indices = heavy_indices.tolist()
-                light_indices = light_indices.tolist()
-                len_heavy = int(len_heavy.detach().cpu().numpy())
-                light_indices = [int(each + len_heavy) for each in light_indices]
-                heavy_indices = [int(each) for each in heavy_indices]
-                labels = labels[0]
-                output = output[0]
-                labels_trimmed = labels[heavy_indices + light_indices]
-                outputs_trimmed = output[heavy_indices + light_indices]
-            else:
-                labels = labels[0]
-                output = output[0]
-                labels_trimmed = labels[:len_labels_paired]
-                outputs_trimmed = output[:len_labels_paired]
-            if add_reverse:
-                output_flip = model(embedding_flip)
-                output_flip = output_flip.detach().cpu().numpy()
-                output_flip = output_flip[0]
-                output_reverse = output_flip[int(output_flip.shape[-1]-len_labels_paired):][::-1]
-                outputs_trimmed = (outputs_trimmed+output_reverse)/2
-
-            outputs_and_labels[str(i)]={"labels":labels_trimmed.tolist(),"outputs":outputs_trimmed.tolist()}
-            all_outputs.extend(outputs_trimmed)
-            all_targets.extend(labels_trimmed)
+            all_outputs.extend(output)
+            all_targets.extend(labels)
 
     # Converting lists to numpy arrays for AUC and ROC calculation
     all_outputs = np.array(all_outputs)
@@ -125,10 +102,8 @@ def main(
     result_folder.mkdir(exist_ok=True, parents=True)
     test_loader = torch.load(test_loader_path)
     if model_type=="MLP":
-        model = MLP(input_dim_x=input_dim_x, input_dim_y=1024)
-    elif model_type=="CNN":
-        model = CNN(input_dim_x=input_dim_x, input_dim_y=1024)
-    else :
+        model = MLP_AA()
+    else:
         raise ValueError("No model of this name known.")
     print("LOADING MODEL")
     model.load_state_dict(torch.load(model_path, weights_only=True))
