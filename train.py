@@ -24,8 +24,6 @@ def train(
     n_epochs=3,
     model_save_path=Path("/home/gathenes/all_structures/data_high_qual/checkpoint.pt"),
     criterion=nn.BCELoss(),
-    cnn:bool=False,
-    add_reverse:bool=False,
 ):
     # Training loop
     device = torch.device("cpu")
@@ -37,17 +35,22 @@ def train(
     for epoch in range(1, n_epochs + 1):
         train_loss = 0.0
         model.train()
-        for i, (embedding, labels, _,_, _, _, _, _) in enumerate(tqdm(train_loader)):
+        for i, (embedding, labels, len_heavy, len_light) in enumerate(tqdm(train_loader)):
             embedding, labels = embedding.to(device), labels.to(device)
-            embedding = embedding.view(256 * 10, 1024)
-            labels=labels.view(256*10)
-            # embedding = (batch_size, 256, 1024)
+            embedding_list=[]
+            label_list = []
+            for i in range(len_heavy.shape[-1]):
+                heavy, light = len_heavy[i], len_light[i]
+                ran = list(range(1,heavy+1))+list(range(heavy+2, heavy+light+2))
+                embedding_list.append(embedding[i][ran])
+                label_list.append(labels[i][ran])
+            embedding = torch.cat(embedding_list, dim=0)
+            labels = torch.cat(label_list, dim=0)
             optimizer.zero_grad()
             output = model(embedding)
-            # output, labels of shape (256,1), (256)
-            output=output.view(256*10)
+            output=output.view(-1)
+            #print(embedding.shape, labels.shape, output.shape)
             loss = criterion(output, labels)
-            # Backpropagate the loss and update gradients
             loss.backward()
             optimizer.step()
             train_loss += loss.item() * embedding.size(0)
@@ -60,12 +63,19 @@ def train(
         if len(test_loader) == 0:
             continue
         with torch.no_grad():
-            for embedding, labels, _,_, _, _, _, _ in test_loader:
+            for embedding, labels, len_heavy, len_light in test_loader:
                 embedding, labels = embedding.to(device), labels.to(device)
-                embedding = embedding.view(256 * 10, 1024)
-                labels=labels.view(256*10)
+                embedding_list=[]
+                label_list = []
+                for i in range(len_heavy.shape[-1]):
+                    heavy, light = len_heavy[i], len_light[i]
+                    ran = list(range(1,heavy+1))+list(range(heavy+2, heavy+light+2))
+                    embedding_list.append(embedding[i][ran])
+                    label_list.append(labels[i][ran])
+                embedding = torch.cat(embedding_list, dim=0)
+                labels = torch.cat(label_list, dim=0)
                 output = model(embedding)
-                output=output.view(256*10)
+                output=output.view(-1)
                 loss = criterion(output, labels)
                 test_loss += loss.item() * embedding.size(0)
                 output = output.detach().cpu().numpy()
@@ -181,9 +191,6 @@ def main(
     cnn = False
     if model_name == "MLP":
         model = MLP_AA()
-    elif model_name == "CNN":
-        cnn = True
-        model = CNN(input_dim_x=input_dim_x, input_dim_y=1024)
     else:
         raise ValueError("Model not recognized.")
     if positive_weight == 1:
@@ -202,8 +209,6 @@ def main(
         n_epochs=n_epochs,
         criterion=criterion,
         model_save_path=model_save_path,
-        cnn=cnn,
-        add_reverse=add_reverse,
     )
     save_plot_path = result_folder / Path("summary_plot.png")
     save_plot(

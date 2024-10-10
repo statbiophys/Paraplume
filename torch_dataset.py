@@ -38,23 +38,14 @@ class ParatopeDataset(Dataset):
         return self.residue_embeddings.shape[0]
 
     def __getitem__(self, index):
-        labels_heavy, numbers_heavy = self.dataset_dict[str(index)]["H_id labels"], self.dataset_dict[str(index)]["H_id numbers"]
-        labels_light, numbers_light = self.dataset_dict[str(index)]["L_id labels"], self.dataset_dict[str(index)]["L_id numbers"]
+        labels_heavy = self.dataset_dict[str(index)]["H_id labels"]
+        labels_light = self.dataset_dict[str(index)]["L_id labels"]
 
         residue_embedding = self.residue_embeddings[index,:,:]
 
         labels_paired = labels_heavy+labels_light
-        len_labels_paired = len(labels_paired)
         labels_padded = torch.FloatTensor(F.pad(torch.FloatTensor(labels_paired), (0, self.max_length-len(torch.FloatTensor(labels_paired))),"constant", 0))
-
-        inverse_number_heavy = {each : i for i,each in enumerate(numbers_heavy)}
-        inverse_number_light = {each : i for i,each in enumerate(numbers_light)}
-        heavy_indices, light_indices = get_cdr_pm2_indices(inverse_number_heavy, inverse_number_light)
-        heavy_indices = torch.FloatTensor(F.pad(torch.FloatTensor(heavy_indices), (0, 100-len(torch.FloatTensor(heavy_indices))),"constant", -1))
-        light_indices = torch.FloatTensor(F.pad(torch.FloatTensor(light_indices), (0, 100-len(torch.FloatTensor(light_indices))),"constant", -1))
-
-        len_padd_heavy = len(heavy_indices)
-        len_padd_light = len(light_indices)
         len_heavy = len(labels_heavy)
+        len_light = len(labels_light)
 
-        return residue_embedding, labels_padded, len_labels_paired, heavy_indices, light_indices, len_padd_heavy, len_padd_light, len_heavy
+        return residue_embedding, labels_padded, len_heavy, len_light
