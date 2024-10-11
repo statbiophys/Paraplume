@@ -232,7 +232,6 @@ def main(
         "lr_strategy":lr_strategy,
         "batch_size":batch_size,
         "batch_norm":batch_norm,
-        "flip":flip,
     }
     with open(train_folder_path / Path("dict.json")) as f :
         dict_train = json.load(f)
