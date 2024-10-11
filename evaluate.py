@@ -19,8 +19,6 @@ app = typer.Typer(add_completion=False)
 def test(
     model,
     test_loader,
-    cdr_pm2: bool = False,
-    add_reverse:bool=False,
 ):
     # Training loop
     device = torch.device("cpu")
@@ -82,6 +80,15 @@ def main(
     batch_size:int=typer.Option(
         10, "--batch-size", "-bs", help="Batch size. Defaults to 10."
     ),
+    dim1:int=typer.Option(
+        1000, "--dim1", help="Dimension of first layer. Defaults to 1000."
+    ),
+    dim2:int=typer.Option(
+        1, "--dim2", help="Dimension of second layer. 1 means no second layer. Defaults to 1."
+    ),
+    batch_norm:bool=typer.Option(
+        False, "--batch-norm", help="Whether to use batchnorm or not. Defaults to False."
+    )
 ) -> None:
     result_folder=model_path.parents[0]
     print(result_folder.as_posix())
@@ -97,11 +104,12 @@ def main(
     torch.save(test_loader, result_folder / Path(f'test_dataloader_batchsize_{batch_size}.pkl'))
 
     if model_type=="MLP":
-        model = MLP()
+        model = MLP(dim1=dim1, dim2=dim2, batch_norm=batch_norm)
     else:
         raise ValueError("No model of this name known.")
     print("LOADING MODEL")
     model.load_state_dict(torch.load(model_path, weights_only=True))
+    model.eval()
     print("RETRIEVING RESULTS")
     outputs_and_labels, auc, ap = test(
         model=model,

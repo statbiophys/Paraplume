@@ -51,12 +51,26 @@ class EarlyStopping:
             torch.save(model.state_dict(), self.path.as_posix())
 
 class MLP(nn.Module):
-    def __init__(self):
+    def __init__(self, dropout_prob=0, dim1 = 1000, dim2=1, batch_norm=False):
         super(MLP, self).__init__()
-        self.l1 = nn.Linear(1024, 1000)
-        self.l2 = nn.Linear(1000,1)
-        self.l3 = nn.Linear(1000,1000)
+        self.batch_norm=batch_norm
+        self.deep=dim2>1
+        self.dropout = nn.Dropout(p=dropout_prob)
+        self.l1 = nn.Linear(1024, dim1)
+        self.l2 = nn.Linear(dim1, dim2)
+        self.l3 = nn.Linear(dim2,1)
+        self.bn1 = nn.BatchNorm1d(dim1)  # Batch normalization for first layer
+        self.bn2 = nn.BatchNorm1d(dim2)
 
     def forward(self, x):
-        x = self.l2F.relu(self.l1(x))
+        x1=self.l1(x)
+        if self.batch_norm:
+            x1=self.bn1(x1)
+        x2=self.l2(self.dropout(F.relu(x1)))
+        if not self.deep :
+            x=x2
+        else :
+            if self.batch_norm:
+                x2=self.bn2(x2)
+            x = self.l3(self.dropout(F.relu(x2)))
         return torch.sigmoid(x)

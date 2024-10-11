@@ -93,7 +93,7 @@ def create_embeddings(
     torch.save(residue_embeddings, save_path)
     return residue_embeddings
 
-def create_dataloader(dataset_dict:Dict,residue_embeddings:torch.Tensor, batch_size=10)->torch.utils.data.dataloader.DataLoader:
+def create_dataloader(dataset_dict:Dict,residue_embeddings:torch.Tensor, batch_size=10, shuffle:bool=False)->torch.utils.data.dataloader.DataLoader:
     """Take dataset_dict and embeddings and return dataloader.
 
     Args:
@@ -105,7 +105,7 @@ def create_dataloader(dataset_dict:Dict,residue_embeddings:torch.Tensor, batch_s
         torch.utils.data.dataloader.DataLoader: Dataloader to use for training.
     """
     dataset = ParatopeDataset(dataset_dict=dataset_dict, residue_embeddings=residue_embeddings)
-    dataset_loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size)
+    dataset_loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
     return dataset_loader
 
 @app.command()
