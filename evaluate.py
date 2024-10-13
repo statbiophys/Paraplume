@@ -99,6 +99,7 @@ def main(
         "model_path": str(model_path),
         "test_folder_path": str(test_folder_path),
         "result_folder": str(result_folder),
+        "alpha":alpha,
     }
     with open(test_folder_path / Path("dict.json")) as f :
         dict_test = json.load(f)
