@@ -175,7 +175,6 @@ def remove_ids(pdbs_and_chain: pd.DataFrame)->List:
         if not has_heavy:
             removed_ids.append(ind)
             removed_pdbs.add(pdb_code)
-
     pdbs_and_chain=pdbs_and_chain.query("index not in @removed_ids")
     return pdbs_and_chain
 
@@ -199,15 +198,15 @@ def build_dictionary(pdbs_and_chain:pd.DataFrame)->Dict:
         df, _ = read_pdb_to_dataframe(
             f"/home/gathenes/all_structures/imgt/{pdb_code}.pdb"
         )
-        df = df.query("record_name=='ATOM'")
+        df = df.query("record_name=='ATOM' and atom_name!='H'")
         df_chain_heavy = df.query("chain_id == @H_id")
         df_chain_light = df.query("chain_id == @L_id")
-        df_chain_antigen = df.query("chain_id == @antigen_id")
-
+        antigen_ids=antigen_id.split(";")
+        df_chain_antigen = df.query("chain_id.isin(@antigen_ids)")
         abr_dict_heavy = get_binding_residues(df_chain_heavy, df_chain_antigen)
-        labels_heavy, sequence_heavy, numbers_heavy = get_labels(abr_dict_heavy["positions"], abr_dict_heavy["distances"])
+        labels_heavy_4_5, sequence_heavy, numbers_heavy = get_labels(abr_dict_heavy["positions"], abr_dict_heavy["distances"], alpha=4.5)
         abr_dict_light = get_binding_residues(df_chain_light, df_chain_antigen)
-        labels_light, sequence_light, numbers_light = get_labels(abr_dict_light["positions"], abr_dict_light["distances"])
+        labels_light_4_5, sequence_light, numbers_light = get_labels(abr_dict_light["positions"], abr_dict_light["distances"], alpha=4.5)
 
         dataset_dict[index]["pdb_code"]=pdb_code
 
@@ -228,15 +227,25 @@ def build_dictionary(pdbs_and_chain:pd.DataFrame)->Dict:
             right-=1
         light_left, light_right = inverse_number_light[left], inverse_number_light[right]
 
-        labels_heavy, sequence_heavy, numbers_heavy = labels_heavy[heavy_left:heavy_right+1], sequence_heavy[heavy_left:heavy_right+1], numbers_heavy[heavy_left:heavy_right+1]
-        labels_light, sequence_light, numbers_light = labels_light[light_left:light_right+1], sequence_light[light_left:light_right+1], numbers_light[light_left:light_right+1]
+        labels_heavy_4_5, sequence_heavy, numbers_heavy = labels_heavy_4_5[heavy_left:heavy_right+1], sequence_heavy[heavy_left:heavy_right+1], numbers_heavy[heavy_left:heavy_right+1]
+        labels_light_4_5, sequence_light, numbers_light = labels_light_4_5[light_left:light_right+1], sequence_light[light_left:light_right+1], numbers_light[light_left:light_right+1]
 
         dataset_dict[index]["H_id numbers"]=numbers_heavy
         dataset_dict[index]["L_id numbers"]=numbers_light
 
         dataset_dict[index]["H_id sequence"] = "".join(sequence_heavy)
-        dataset_dict[index]["H_id labels"] = labels_heavy
+        dataset_dict[index]["H_id labels 4.5"] = labels_heavy_4_5
         dataset_dict[index]["L_id sequence"] = "".join(sequence_light)
-        dataset_dict[index]["L_id labels"] = labels_light
+        dataset_dict[index]["L_id labels 4.5"] = labels_light_4_5
+
+        for alpha in [3,3.5,4,5,5.5,6,6.5,7,7.5]:
+            labels_heavy, _, _ = get_labels(abr_dict_heavy["positions"], abr_dict_heavy["distances"], alpha=alpha)
+            labels_light, _, _ = get_labels(abr_dict_light["positions"], abr_dict_light["distances"], alpha=alpha)
+            labels_heavy = labels_heavy[heavy_left:heavy_right+1]
+            labels_light = labels_light[light_left:light_right+1]
+            dataset_dict[index][f"H_id labels {alpha}"] = labels_heavy
+            dataset_dict[index][f"L_id labels {alpha}"] = labels_light
+
+
 
     return dataset_dict

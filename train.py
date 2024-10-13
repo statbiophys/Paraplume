@@ -215,7 +215,18 @@ def main(
     batch_norm:bool=typer.Option(
         False, "--batch-norm", help="Whether to use batchnorm or not. Defaults to False."
     ),
+    override:bool=typer.Option(
+        False, "--override", help="Override results. Defaults to False"
+    ),
+    alpha:str=typer.Option(
+        4.5, "--alpha", help="Alpha distance to use for labels. Default to 4.5."
+    )
 ) -> None:
+    if (result_folder/Path("summary_dict.json")).exists() and not override :
+        print("Not overriding results.")
+        return
+    elif (result_folder/Path("summary_dict.json")).exists():
+        print("Overriding results.")
     result_folder.mkdir(exist_ok=True, parents=True)
     args_dict = {
         "train_folder_path": str(train_folder_path),
@@ -232,6 +243,8 @@ def main(
         "lr_strategy":lr_strategy,
         "batch_size":batch_size,
         "batch_norm":batch_norm,
+        "override":override,
+        "alpha":alpha,
     }
     with open(train_folder_path / Path("dict.json")) as f :
         dict_train = json.load(f)
@@ -241,10 +254,10 @@ def main(
         dict_val = json.load(f)
     val_embeddings = torch.load(val_folder_path / Path("embeddings.pt"), weights_only=True)
 
-    train_loader = create_dataloader(dataset_dict=dict_train, residue_embeddings=train_embeddings, batch_size=batch_size, shuffle=True)
-    val_loader = create_dataloader(dataset_dict=dict_val, residue_embeddings=val_embeddings, batch_size=batch_size)
-    torch.save(train_loader, result_folder / Path(f'train_dataloader_batchsize_{batch_size}.pkl'))
-    torch.save(val_loader, result_folder / Path(f'val_dataloader_batchsize_{batch_size}.pkl'))
+    train_loader = create_dataloader(dataset_dict=dict_train, residue_embeddings=train_embeddings, batch_size=batch_size, shuffle=True, alpha=alpha)
+    val_loader = create_dataloader(dataset_dict=dict_val, residue_embeddings=val_embeddings, batch_size=batch_size, alpha=alpha)
+    #torch.save(train_loader, result_folder / Path(f'train_dataloader_batchsize_{batch_size}_alpha_{alpha}.pkl'))
+    #torch.save(val_loader, result_folder / Path(f'val_dataloader_batchsize_{batch_size}_alpha_{alpha}.pkl'))
 
     if model_name == "MLP":
         model = MLP(dropout_prob=dropout_prob, dim1=dim1, dim2=dim2, batch_norm=batch_norm)

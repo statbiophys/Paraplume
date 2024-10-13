@@ -29,16 +29,17 @@ def get_cdr_pm2_indices(inverse_number_heavy, inverse_number_light):
 
 class ParatopeDataset(Dataset):
 
-    def __init__(self, dataset_dict: Dict, residue_embeddings:torch.Tensor):
+    def __init__(self, dataset_dict: Dict, residue_embeddings:torch.Tensor, alpha:str="4.5"):
         self.dataset_dict = dataset_dict
         self.residue_embeddings = residue_embeddings
+        self.alpha=alpha
 
     def __len__(self):
         return self.residue_embeddings.shape[0]
 
     def __getitem__(self, index):
-        labels_heavy = self.dataset_dict[str(index)]["H_id labels"]
-        labels_light = self.dataset_dict[str(index)]["L_id labels"]
+        labels_heavy = self.dataset_dict[str(index)][f"H_id labels {self.alpha}"]
+        labels_light = self.dataset_dict[str(index)][f"L_id labels {self.alpha}"]
 
         residue_embedding = self.residue_embeddings[index,:,:]
 

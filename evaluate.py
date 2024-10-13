@@ -88,6 +88,9 @@ def main(
     ),
     batch_norm:bool=typer.Option(
         False, "--batch-norm", help="Whether to use batchnorm or not. Defaults to False."
+    ),
+    alpha:str=typer.Option(
+        4.5, "--alpha", help="Alpha distance to use for labels. Default to 4.5."
     )
 ) -> None:
     result_folder=model_path.parents[0]
@@ -100,8 +103,8 @@ def main(
     with open(test_folder_path / Path("dict.json")) as f :
         dict_test = json.load(f)
     test_embeddings = torch.load(test_folder_path / Path("embeddings.pt"), weights_only=True)
-    test_loader = create_dataloader(dataset_dict=dict_test, residue_embeddings=test_embeddings, batch_size=batch_size)
-    torch.save(test_loader, result_folder / Path(f'test_dataloader_batchsize_{batch_size}.pkl'))
+    test_loader = create_dataloader(dataset_dict=dict_test, residue_embeddings=test_embeddings, batch_size=batch_size, alpha=alpha)
+    #torch.save(test_loader, result_folder / Path(f'test_dataloader_batchsize_{batch_size}.pkl'))
 
     if model_type=="MLP":
         model = MLP(dim1=dim1, dim2=dim2, batch_norm=batch_norm)
