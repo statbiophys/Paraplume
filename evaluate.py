@@ -86,6 +86,9 @@ def main(
     dim2:int=typer.Option(
         1, "--dim2", help="Dimension of second layer. 1 means no second layer. Defaults to 1."
     ),
+    dim3:int=typer.Option(
+        1, "--dim3", help="Dimension of second layer. 1 means no second layer. Defaults to 1."
+    ),
     batch_norm:bool=typer.Option(
         False, "--batch-norm", help="Whether to use batchnorm or not. Defaults to False."
     ),
@@ -108,7 +111,7 @@ def main(
     #torch.save(test_loader, result_folder / Path(f'test_dataloader_batchsize_{batch_size}.pkl'))
 
     if model_type=="MLP":
-        model = MLP(dim1=dim1, dim2=dim2, batch_norm=batch_norm)
+        model = MLP(dim1=dim1, dim2=dim2,dim3=dim3, batch_norm=batch_norm)
     else:
         raise ValueError("No model of this name known.")
     print("LOADING MODEL")

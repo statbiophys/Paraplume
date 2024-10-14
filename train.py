@@ -37,7 +37,7 @@ def train(
     val_loss_list = []
     auc_list = []
     ap_list = []
-    early_stopping = EarlyStopping(patience=30, path=model_save_path, best_score=0)
+    early_stopping = EarlyStopping(patience=20, path=model_save_path, best_score=0)
     if lr_strategy == "step":
         scheduler = StepLR(optimizer, step_size=20)
     elif lr_strategy == "plateau":
@@ -212,6 +212,9 @@ def main(
     dim2:int=typer.Option(
         1, "--dim2", help="Dimension of second layer. 1 means no second layer. Defaults to 1."
     ),
+    dim3:int=typer.Option(
+        1, "--dim3", help="Dimension of second layer. 1 means no second layer. Defaults to 1."
+    ),
     batch_norm:bool=typer.Option(
         False, "--batch-norm", help="Whether to use batchnorm or not. Defaults to False."
     ),
@@ -238,6 +241,7 @@ def main(
         "positive_weight": positive_weight,
         "dim1":dim1,
         "dim2":dim2,
+        "dim3":dim3,
         "mask_prob":mask_prob,
         "dropout_prob":dropout_prob,
         "lr_strategy":lr_strategy,
@@ -260,7 +264,7 @@ def main(
     #torch.save(val_loader, result_folder / Path(f'val_dataloader_batchsize_{batch_size}_alpha_{alpha}.pkl'))
 
     if model_name == "MLP":
-        model = MLP(dropout_prob=dropout_prob, dim1=dim1, dim2=dim2, batch_norm=batch_norm)
+        model = MLP(dropout_prob=dropout_prob, dim1=dim1, dim2=dim2,dim3=dim3, batch_norm=batch_norm)
     else:
         raise ValueError("Model not recognized.")
     if positive_weight == 1:

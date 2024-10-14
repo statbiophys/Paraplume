@@ -7,7 +7,7 @@ import pandas as pd
 import torch
 import typer
 from torch_dataset import ParatopeDataset
-from transformers import BertModel, BertTokenizer
+from transformers import BertModel, BertTokenizer, T5EncoderModel, T5Tokenizer
 from utils import build_dictionary, remove_ids
 
 app = typer.Typer(add_completion=False)
@@ -60,6 +60,7 @@ def create_dictionary(
 def create_embeddings(
         dataset_dict:Dict,
         save_path : Path = Path('/home/gathenes/all_structures/data_high_qual/embeddings_241003.pt'),
+
     ):
     """Create LLM amino acid embeddings.
 
@@ -71,14 +72,15 @@ def create_embeddings(
     print("CREATING EMBEDDINGS")
     sequence_heavy_emb = [dataset_dict[index]["H_id sequence"] for index in dataset_dict]
     sequence_light_emb = [dataset_dict[index]["L_id sequence"] for index in dataset_dict]
-    tokeniser = BertTokenizer.from_pretrained("Exscientia/IgBert", do_lower_case=False)
-    model = BertModel.from_pretrained("Exscientia/IgBert", add_pooling_layer=False)
+    ##################################################
+    bert_tokeniser = BertTokenizer.from_pretrained("Exscientia/IgBert", do_lower_case=False)
+    bert_model = BertModel.from_pretrained("Exscientia/IgBert", add_pooling_layer=False)
     paired_sequences = []
     for seq_heavy, seq_light in zip(sequence_heavy_emb, sequence_light_emb):
         paired_sequences.append(
             " ".join(seq_heavy) + " [SEP] " + " ".join(seq_light)
         )
-    tokens = tokeniser.batch_encode_plus(
+    tokens = bert_tokeniser.batch_encode_plus(
         paired_sequences,
         add_special_tokens=True,
         padding="max_length",
@@ -87,10 +89,33 @@ def create_embeddings(
         return_special_tokens_mask=True,
     )
     with torch.no_grad():
-        output = model(
+        output = bert_model(
             input_ids=tokens["input_ids"], attention_mask=tokens["attention_mask"]
         )
-        residue_embeddings = output.last_hidden_state
+        bert_residue_embeddings = output.last_hidden_state
+    ##################################################
+    igt5_tokeniser = T5Tokenizer.from_pretrained("Exscientia/IgT5", do_lower_case=False)
+    igt5_model = T5EncoderModel.from_pretrained("Exscientia/IgT5")
+    paired_sequences = []
+    for seq_heavy, seq_light in zip(sequence_heavy_emb, sequence_light_emb):
+        paired_sequences.append(
+            " ".join(seq_heavy) + " [SEP] " + " ".join(seq_light)
+        )
+    tokens = igt5_tokeniser.batch_encode_plus(
+        paired_sequences,
+        add_special_tokens=True,
+        padding="max_length",
+        max_length=256+3,
+        return_tensors="pt",
+        return_special_tokens_mask=True,
+    )
+    with torch.no_grad():
+        output = igt5_model(
+            input_ids=tokens["input_ids"], attention_mask=tokens["attention_mask"]
+        )
+        igt5_residue_embeddings = output.last_hidden_state
+    residue_embeddings = torch.cat([bert_residue_embeddings, igt5_residue_embeddings], dim=2)
+    print(residue_embeddings.shape)
     torch.save(residue_embeddings, save_path)
     return residue_embeddings
 
