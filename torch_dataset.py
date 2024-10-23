@@ -49,3 +49,29 @@ class ParatopeDataset(Dataset):
         len_light = len(labels_light)
 
         return residue_embedding, labels_padded, len_heavy, len_light
+
+class ParatopePredictDataset(Dataset):
+
+    def __init__(self, dataset_dict: Dict, residue_embeddings:torch.Tensor, alpha:str="4.5"):
+        self.dataset_dict = dataset_dict
+        self.residue_embeddings = residue_embeddings
+        self.alpha=alpha
+
+    def __len__(self):
+        return self.residue_embeddings.shape[0]
+
+    def __getitem__(self, index):
+        labels_heavy = self.dataset_dict[str(index)][f"H_id labels {self.alpha}"]
+        labels_light = self.dataset_dict[str(index)][f"L_id labels {self.alpha}"]
+        pdb_code = self.dataset_dict[str(index)]["pdb_code"]
+        numbers_heavy = self.dataset_dict[str(index)]["H_id numbers"]
+        numbers_light = self.dataset_dict[str(index)]["L_id numbers"]
+
+        residue_embedding = self.residue_embeddings[index,:,:]
+
+        labels_paired = labels_heavy+labels_light
+        labels_padded = torch.FloatTensor(F.pad(torch.FloatTensor(labels_paired), (0, 259-len(torch.FloatTensor(labels_paired))),"constant", 0))
+        len_heavy = len(labels_heavy)
+        len_light = len(labels_light)
+
+        return residue_embedding, labels_padded, len_heavy, len_light, pdb_code, numbers_heavy, numbers_light

@@ -88,7 +88,7 @@ class MLP(nn.Module):
 class MLP_final(nn.Module):
     def __init__(self, dim = 3):
         super(MLP_final, self).__init__()
-        self.l1 = nn.Linear(dim,1)
+        self.l1 = nn.Linear(dim,3)
         with torch.no_grad():
             print(self.l1.weight.shape)# Disable gradient updates during initialization
             self.l1.weight.fill_(0)  # Set all weights to 0 initially
@@ -97,5 +97,5 @@ class MLP_final(nn.Module):
         self.l2 = nn.Linear(3, 1)
 
     def forward(self, x):
-        #return torch.sigmoid(self.l2(F.relu(self.l1(x))))
-        return torch.sigmoid(self.l1(x))
+        return torch.sigmoid(self.l2(F.relu(self.l1(x))))
+        #return torch.sigmoid(self.l1(x))

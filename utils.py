@@ -57,13 +57,14 @@ def get_binding_residues(
 
     for row_ab, (residue_name, residue_number) in enumerate(values):
         # print(residue_name,residue_number)
+        if residue_number=="nan":
+            raise ValueError(residue_number)
         amino_dict["positions"][residue_number] = amino_acid_dict[residue_name]
         if residue_number not in amino_dict["distances"]:
             amino_dict["distances"][residue_number] = [np.min(distances[row_ab, :])]
 
         else:
             amino_dict["distances"][residue_number].append(np.min(distances[row_ab, :]))
-
     return amino_dict
 
 def get_labels(
@@ -87,7 +88,7 @@ def get_labels(
     for pos in positions:
         sequence.append(positions[pos])
         numbers.append(pos)
-        if np.mean(np.percentile(distances[pos], percentile)<= alpha):
+        if np.percentile(distances[pos], percentile)<= alpha:
             labels.append(1)
         else:
             labels.append(0)
@@ -192,13 +193,15 @@ def build_dictionary(pdbs_and_chain:pd.DataFrame)->Dict:
     dataset_dict = rec_dd()
     for index in tqdm(range(len(pdbs_and_chain))):
         pdb_code = pdbs_and_chain.iloc[index]["pdb"]
+        if pdb_code=='2ltq':
+            continue
         H_id = pdbs_and_chain.iloc[index]["Hchain"]
         L_id = pdbs_and_chain.iloc[index]["Lchain"]
         antigen_id = pdbs_and_chain.iloc[index]["antigen_chain"]
         df, _ = read_pdb_to_dataframe(
             f"/home/gathenes/all_structures/imgt/{pdb_code}.pdb"
         )
-        df = df.query("record_name=='ATOM' and atom_name!='H'")
+        df = df.query("record_name=='ATOM' and element_symbol!='H'")
         df_chain_heavy = df.query("chain_id == @H_id")
         df_chain_light = df.query("chain_id == @L_id")
         antigen_ids=antigen_id.split(";")
@@ -209,17 +212,14 @@ def build_dictionary(pdbs_and_chain:pd.DataFrame)->Dict:
         labels_light_4_5, sequence_light, numbers_light = get_labels(abr_dict_light["positions"], abr_dict_light["distances"], alpha=4.5)
 
         dataset_dict[index]["pdb_code"]=pdb_code
-
         inverse_number_heavy = {each : i for i,each in enumerate(numbers_heavy)}
         inverse_number_light = {each : i for i,each in enumerate(numbers_light)}
-
         left, right=1, 128
         while left not in inverse_number_heavy :
             left+=1
         while right not in inverse_number_heavy:
             right-=1
         heavy_left, heavy_right = inverse_number_heavy[left], inverse_number_heavy[right]
-
         left, right=1, 128
         while left not in inverse_number_light :
             left+=1

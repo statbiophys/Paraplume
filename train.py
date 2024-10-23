@@ -223,6 +223,9 @@ def main(
     ),
     alpha:str=typer.Option(
         4.5, "--alpha", help="Alpha distance to use for labels. Default to 4.5."
+    ),
+    seed:int=typer.Option(
+        0, "--seed", help="Seed to use for training."
     )
 ) -> None:
     if (result_folder/Path("summary_dict.json")).exists() and not override :
@@ -249,7 +252,9 @@ def main(
         "batch_norm":batch_norm,
         "override":override,
         "alpha":alpha,
+        "seed":seed,
     }
+    torch.manual_seed(seed)
     with open(train_folder_path / Path("dict.json")) as f :
         dict_train = json.load(f)
     train_embeddings = torch.load(train_folder_path / Path("embeddings.pt"), weights_only=True)
