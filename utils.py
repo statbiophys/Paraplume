@@ -1,11 +1,9 @@
 from collections import defaultdict
-from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from biopandas.pdb import PandasPdb
-from prody import parsePDBHeader
 from tqdm import tqdm
 
 
@@ -34,6 +32,7 @@ amino_acid_dict = {
     "TRP": "W",
     "TYR": "Y",
 }
+
 def get_binding_residues(
     df_antibody: pd.DataFrame, df_antigen: pd.DataFrame
 ) -> Dict[str, Dict[int, str]]:
@@ -47,24 +46,26 @@ def get_binding_residues(
         Dict[str, Dict[int, str]]: Dictionary with imgt positions mapping to aa name, and list \
             of distances to antigen
     """
-    antibody_coords = df_antibody[["x_coord", "y_coord", "z_coord"]].to_numpy()
-    antigen_coords = df_antigen[["x_coord", "y_coord", "z_coord"]].to_numpy()
+
+    antibody_coords = df_antibody[["x", "y", "z"]].astype(float).to_numpy()
+    antigen_coords = df_antigen[["x", "y", "z"]].astype(float).to_numpy()
+
     # Compute pairwise distances
 
-    values = df_antibody[["residue_name", "residue_number"]].values
+    values = df_antibody[["AA", "Res_Num"]].values
     distances = np.linalg.norm(antibody_coords[:, np.newaxis] - antigen_coords, axis=2)
     amino_dict = {"positions": {}, "distances": {}}
 
-    for row_ab, (residue_name, residue_number) in enumerate(values):
-        # print(residue_name,residue_number)
-        if residue_number=="nan":
-            raise ValueError(residue_number)
-        amino_dict["positions"][residue_number] = amino_acid_dict[residue_name]
-        if residue_number not in amino_dict["distances"]:
-            amino_dict["distances"][residue_number] = [np.min(distances[row_ab, :])]
+    for row_ab, (AA, Res_Num) in enumerate(values):
+        # print(AA,Res_Num)
+        if Res_Num=="nan":
+            raise ValueError(Res_Num)
+        amino_dict["positions"][Res_Num] = amino_acid_dict[AA]
+        if Res_Num not in amino_dict["distances"]:
+            amino_dict["distances"][Res_Num] = [np.min(distances[row_ab, :])]
 
         else:
-            amino_dict["distances"][residue_number].append(np.min(distances[row_ab, :]))
+            amino_dict["distances"][Res_Num].append(np.min(distances[row_ab, :]))
     return amino_dict
 
 def get_labels(
@@ -94,91 +95,6 @@ def get_labels(
             labels.append(0)
     return labels, sequence, numbers
 
-
-def read_pdb_to_dataframe(
-    pdb_path: Optional[str] = None,
-    model_index: int = 1,
-    parse_header: bool = True,
-) -> pd.DataFrame:
-    """
-    Read a PDB file, and return a Pandas DataFrame containing the atomic coordinates and metadata.
-
-    Args:
-        pdb_path (str, optional): Path to a local PDB file to read. Defaults to None.
-        model_index (int, optional): Index of the model to extract from the PDB file, in case
-            it contains multiple models. Defaults to 1.
-        parse_header (bool, optional): Whether to parse the PDB header and extract metadata.
-            Defaults to True.
-
-    Returns:
-        pd.DataFrame: A DataFrame containing the atomic coordinates and metadata, with one row
-            per atom
-    """
-    atomic_df = PandasPdb().read_pdb(pdb_path)
-    if parse_header:
-        header = parsePDBHeader(pdb_path)
-    else:
-        header = None
-    atomic_df = atomic_df.get_model(model_index)
-    if len(atomic_df.df["ATOM"]) == 0:
-        raise ValueError(f"No model found for index: {model_index}")
-    return pd.concat([atomic_df.df["ATOM"], atomic_df.df["HETATM"]]), header
-
-
-def remove_ids(pdbs_and_chain: pd.DataFrame)->List:
-    """Remove ids when a pdb file is missing a light, heavy or antigen chain.
-
-    Args:
-        pdbs_and_chain (pd.DataFrame): Dataframe with pdb codes, and the heavy, light and antigen \
-            chain name.
-
-    Returns:
-        List : Lists of ids to remove from pdbs_and_chain
-    """
-    removed_ids = []
-    removed_pdbs=set()
-    # Extract relevant columns to reduce iloc lookups inside the loop
-    ids = pdbs_and_chain["index"].values
-    pdb_codes = pdbs_and_chain["pdb"].values
-    H_ids = pdbs_and_chain["Hchain"].values
-    L_ids = pdbs_and_chain["Lchain"].values
-    antigen_ids = pdbs_and_chain["antigen_chain"].values
-
-    # Iterate over the DataFrame more efficiently
-    for index in tqdm(range(len(pdbs_and_chain))):
-        pdb_code = pdb_codes[index]
-        H_id = H_ids[index]
-        L_id = L_ids[index]
-        antigen_id = antigen_ids[index]
-        ind = ids[index]
-        if pdb_code in removed_pdbs:
-            removed_ids.append(ind)
-            continue
-        # Load PDB file once per iteration
-        df, _ = read_pdb_to_dataframe(f"/home/gathenes/all_structures/imgt/{pdb_code}.pdb")
-        df = df.query("record_name=='ATOM'")
-
-        # Check presence of heavy, light, and antigen chains using boolean masks
-        # Add to remove_ids based on the conditions
-
-        has_light = (df['chain_id'] == L_id).any()
-        if not has_light:
-            removed_ids.append(ind)
-            removed_pdbs.add(pdb_code)
-
-        has_antigen = (df['chain_id'] == antigen_id).any()
-        if not has_antigen:
-            removed_ids.append(ind)
-            removed_pdbs.add(pdb_code)
-
-
-        has_heavy = (df['chain_id'] == H_id).any()
-        if not has_heavy:
-            removed_ids.append(ind)
-            removed_pdbs.add(pdb_code)
-    pdbs_and_chain=pdbs_and_chain.query("index not in @removed_ids")
-    return pdbs_and_chain
-
 def build_dictionary(pdbs_and_chain:pd.DataFrame)->Dict:
     """Transform dataframe with pdb codes and heavy and light chain names into Dictionary with \
         indices mapping to heavy and light lists of matching imgt numbers, sequences and labels.
@@ -193,19 +109,16 @@ def build_dictionary(pdbs_and_chain:pd.DataFrame)->Dict:
     dataset_dict = rec_dd()
     for index in tqdm(range(len(pdbs_and_chain))):
         pdb_code = pdbs_and_chain.iloc[index]["pdb"]
-        if pdb_code=='2ltq':
-            continue
+
         H_id = pdbs_and_chain.iloc[index]["Hchain"]
         L_id = pdbs_and_chain.iloc[index]["Lchain"]
         antigen_id = pdbs_and_chain.iloc[index]["antigen_chain"]
-        df, _ = read_pdb_to_dataframe(
-            f"/home/gathenes/all_structures/imgt/{pdb_code}.pdb"
-        )
-        df = df.query("record_name=='ATOM' and element_symbol!='H'")
-        df_chain_heavy = df.query("chain_id == @H_id")
-        df_chain_light = df.query("chain_id == @L_id")
+        df = format_pdb(f"/home/gathenes/all_structures/imgt/{pdb_code}.pdb")
+
+        df_chain_heavy = df.query("Chain == @H_id")
+        df_chain_light = df.query("Chain == @L_id")
         antigen_ids=antigen_id.split(";")
-        df_chain_antigen = df.query("chain_id.isin(@antigen_ids)")
+        df_chain_antigen = df.query("Chain.isin(@antigen_ids)")
         abr_dict_heavy = get_binding_residues(df_chain_heavy, df_chain_antigen)
         labels_heavy_4_5, sequence_heavy, numbers_heavy = get_labels(abr_dict_heavy["positions"], abr_dict_heavy["distances"], alpha=4.5)
         abr_dict_light = get_binding_residues(df_chain_light, df_chain_antigen)
@@ -215,17 +128,17 @@ def build_dictionary(pdbs_and_chain:pd.DataFrame)->Dict:
         inverse_number_heavy = {each : i for i,each in enumerate(numbers_heavy)}
         inverse_number_light = {each : i for i,each in enumerate(numbers_light)}
         left, right=1, 128
-        while left not in inverse_number_heavy :
+        while str(left) not in inverse_number_heavy :
             left+=1
-        while right not in inverse_number_heavy:
+        while str(right) not in inverse_number_heavy:
             right-=1
-        heavy_left, heavy_right = inverse_number_heavy[left], inverse_number_heavy[right]
+        heavy_left, heavy_right = inverse_number_heavy[str(left)], inverse_number_heavy[str(right)]
         left, right=1, 128
-        while left not in inverse_number_light :
+        while str(left) not in inverse_number_light :
             left+=1
-        while right not in inverse_number_light:
+        while str(right) not in inverse_number_light:
             right-=1
-        light_left, light_right = inverse_number_light[left], inverse_number_light[right]
+        light_left, light_right = inverse_number_light[str(left)], inverse_number_light[str(right)]
 
         labels_heavy_4_5, sequence_heavy, numbers_heavy = labels_heavy_4_5[heavy_left:heavy_right+1], sequence_heavy[heavy_left:heavy_right+1], numbers_heavy[heavy_left:heavy_right+1]
         labels_light_4_5, sequence_light, numbers_light = labels_light_4_5[light_left:light_right+1], sequence_light[light_left:light_right+1], numbers_light[light_left:light_right+1]
@@ -245,7 +158,74 @@ def build_dictionary(pdbs_and_chain:pd.DataFrame)->Dict:
             labels_light = labels_light[light_left:light_right+1]
             dataset_dict[index][f"H_id labels {alpha}"] = labels_heavy
             dataset_dict[index][f"L_id labels {alpha}"] = labels_light
-
+    return dataset_dict
 
 
     return dataset_dict
+
+def format_pdb(pdb_file):
+    '''
+    Process pdb file into pandas df
+
+    Original author: Alissa Hummer
+
+    :param pdb_file: file path of .pdb file to convert
+    :returns: df with atomic level info
+    '''
+
+    pd.options.mode.chained_assignment = None
+    pdb_whole = pd.read_csv(pdb_file,header=None,delimiter='\t')
+    pdb_whole.columns = ['pdb']
+    pdb = pdb_whole[pdb_whole['pdb'].str.startswith('ATOM')]
+    pdb['Atom_Num'] = pdb['pdb'].str[6:11].copy()
+    pdb['Atom_Name'] = pdb['pdb'].str[11:16].copy()
+    pdb['AA'] = pdb['pdb'].str[17:20].copy()
+    pdb['Chain'] = pdb['pdb'].str[20:22].copy()
+    pdb['Res_Num'] = pdb['pdb'].str[22:27].copy().str.strip()
+    pdb['x'] = pdb['pdb'].str[27:38].copy()
+    pdb['y'] = pdb['pdb'].str[38:46].copy()
+    pdb['z'] = pdb['pdb'].str[46:54].copy()#
+    pdb['Atom_type'] = pdb['pdb'].str[77].copy()
+    pdb.drop('pdb',axis=1,inplace=True)
+    pdb.replace({' ':''}, regex=True, inplace=True)
+    pdb.reset_index(inplace=True)
+    pdb.drop('index',axis=1,inplace=True)
+
+    # remove H atoms from our data (interested in heavy atoms only)
+    pdb = pdb[pdb['Atom_type']!='H']
+
+    return pdb
+
+def save_plot(train_loss_list, val_loss_list, auc_list, ap_list, save_plot_path):
+    n_epochs = len(train_loss_list)
+
+    # Create a figure with 2x2 subplots
+    fig, axs = plt.subplots(2, 2, figsize=(10, 10))
+
+    # First subplot for Train Loss
+    axs[0, 0].plot(range(1, n_epochs + 1), train_loss_list)
+    axs[0, 0].set_xlabel("num_epochs")
+    axs[0, 0].set_ylabel("Train Loss")
+    axs[0, 0].set_title("Train Loss")
+
+    # Second subplot for val Loss
+    axs[0, 1].plot(range(1, n_epochs + 1), val_loss_list)
+    axs[0, 1].set_xlabel("num_epochs")
+    axs[0, 1].set_ylabel("val Loss")
+    axs[0, 1].set_title("val Loss")
+
+    # Third subplot for AUC
+    axs[1, 0].plot(range(1, n_epochs + 1), auc_list)
+    axs[1, 0].set_xlabel("num_epochs")
+    axs[1, 0].set_ylabel("AUC")
+    axs[1, 0].set_title("AUC")
+
+    # Fourth subplot for AP
+    axs[1, 1].plot(range(1, n_epochs + 1), ap_list)
+    axs[1, 1].set_xlabel("num_epochs")
+    axs[1, 1].set_ylabel("AP")
+    axs[1, 1].set_title("Average Precision (AP)")
+
+    # Adjust layout to avoid overlap
+    plt.tight_layout()
+    plt.savefig(save_plot_path)

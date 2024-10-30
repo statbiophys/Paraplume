@@ -1,0 +1,51 @@
+{
+    "editor.formatOnSave": true,
+    "python.formatting.provider": "black",
+    "python.formatting.blackArgs": [
+        "--line-length=100"
+    ],
+    "python.linting.pylintEnabled": true,
+    "python.linting.mypyEnabled": true,
+    "python.linting.pydocstyleEnabled": true,
+    "python.linting.pylintArgs": [
+        "--rcfile=<.pylintrc from Tools>"
+    ],
+    "[python]": {
+        "editor.codeActionsOnSave": {
+            "source.organizeImports": true
+        },
+        "editor.defaultFormatter": "ms-python.python"
+    },
+    "python.testing.pytestEnabled": true,
+    "jupyter.widgetScriptSources": [
+        "jsdelivr.com",
+        "unpkg.com"
+    ],
+    "jupyter.askForKernelRestart": false,
+    "notebook.cellToolbarLocation": {
+        "default": "right",
+        "jupyter-notebook": "left"
+    },
+    "files.trimTrailingWhitespace": true,
+    "files.insertFinalNewline": true,
+    "files.trimFinalNewlines": true,
+    "editor.rulers": [
+        80,
+        100
+    ],
+    "workbench.startupEditor": "none",
+    "files.exclude": {
+        ".coverage": true,
+        ".pytest_cache": true,
+        ".python-version": true,
+        "**/__pycache__": true,
+        "**/.hypothesis": true,
+        "**/.mypy_cache": true,
+        "**/.venv": true,
+        "**/.vscode": true,
+        "**/*.egg-info": true
+    },
+    "debug.allowBreakpointsEverywhere": true,
+    "debug.inlineValues": "on",
+    "workbench.iconTheme": "material-icon-theme",
+}

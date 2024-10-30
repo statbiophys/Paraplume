@@ -1,0 +1,20 @@
+{
+    "train_folder_path": "/home/gathenes/paratope_model/test/test3/train",
+    "val_folder_path": "/home/gathenes/paratope_model/test/test3/val",
+    "model_name": "MLP",
+    "learning_rate": 0.001,
+    "n_epochs": 1,
+    "result_folder": "/home/gathenes/paratope_model/test/test3/results2",
+    "positive_weight": 1,
+    "dims": "10",
+    "mask_prob": 0.0,
+    "dropouts": "0",
+    "lr_strategy": null,
+    "batch_size": 10,
+    "batchnorm": false,
+    "override": true,
+    "alpha": "4.5",
+    "seed": 0,
+    "best_epoch": "1",
+    "best_ap": "0.2086760659561075"
+}

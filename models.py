@@ -5,6 +5,35 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.nn import Sigmoid
+from torch_geometric.data import Data
+from torch_geometric.nn import TransformerConv
+
+
+class TransformerGNN(nn.Module):
+    def __init__(self, in_channels, hidden_channels, out_channels, num_layers=3, heads=4):
+        super(TransformerGNN, self).__init__()
+        self.convs = nn.ModuleList()
+
+        # First layer transforms input features
+        self.convs.append(TransformerConv(in_channels, hidden_channels, heads=heads, concat=True))
+
+        # Middle layers keep the hidden feature dimension consistent
+        for _ in range(num_layers - 2):
+            self.convs.append(TransformerConv(hidden_channels * heads, hidden_channels, heads=heads, concat=True))
+
+        # Final layer reduces to output channels (class labels, in this case)
+        self.convs.append(TransformerConv(hidden_channels * heads, out_channels, heads=1, concat=False))
+
+    def forward(self, data: Data):
+        x, edge_index = data.x, data.edge_index
+        for conv in self.convs[:-1]:
+            x = conv(x, edge_index)
+            x = torch.relu(x)
+        x = self.convs[-1](x, edge_index)  # No activation on the final layer
+        return x
+
+
 
 
 class EarlyStopping:
@@ -28,7 +57,7 @@ class EarlyStopping:
         self.counter = 0
         self.best_score = best_score
         self.early_stop = False
-        self.val_loss_min = np.Inf
+        self.val_loss_min = np.inf
         self.delta = delta
         self.path = path
 

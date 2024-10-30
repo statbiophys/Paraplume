@@ -1,24 +1,39 @@
 import json
 from pathlib import Path
+from typing import Dict
 
 import numpy as np
 import torch
 import typer
-from create_dataset import create_dataloader
-from models import MLP
 from sklearn.metrics import (
     average_precision_score,
     roc_auc_score,
 )
-from torch import nn
+from torch.nn import BatchNorm1d, Dropout, Linear, ReLU, Sequential, Sigmoid
+from torch_dataset import ParatopeDataset, ParatopeMultiObjectiveDataset
 from tqdm import tqdm
 
 app = typer.Typer(add_completion=False)
 
+def create_dataloader(dataset_dict:Dict,residue_embeddings:torch.Tensor, batch_size=10, shuffle:bool=False, alpha:str="4.5")->torch.utils.data.dataloader.DataLoader:
+    """Take dataset_dict and embeddings and return dataloader.
+
+    Args:
+        dataset_dict (Dict): _description_
+        residue_embeddings (torch.Tensor): _description_
+        batch_size (int, optional): _description_. Defaults to 10.
+
+    Returns:
+        torch.utils.data.dataloader.DataLoader: Dataloader to use for training.
+    """
+    dataset = ParatopeDataset(dataset_dict=dataset_dict, residue_embeddings=residue_embeddings, alpha=alpha)
+    dataset_loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
+    return dataset_loader
 
 def test(
     model,
     test_loader,
+    big_embedding=False,
 ):
     # Training loop
     device = torch.device("cpu")
@@ -38,7 +53,12 @@ def test(
             for i in range(len_heavy.shape[-1]):
                 heavy, light = len_heavy[i], len_light[i]
                 ran = list(range(1,heavy+1))+list(range(heavy+2, heavy+light+2))
-                embedding_list.append(embedding[i][ran])
+                emb=embedding[i][ran,:2048]
+                if big_embedding :
+                    ran2 = list(range(1,heavy+1))+list(range(heavy+4, heavy+light+4))
+                    emb2=embedding[i][ran2,2048:]
+                    emb=torch.cat([emb,emb2], dim=1)
+                embedding_list.append(emb)
                 label_list.append(labels[i][:heavy+light])
             embedding = torch.cat(embedding_list, dim=0)
             labels = torch.cat(label_list, dim=0)
@@ -64,7 +84,7 @@ def test(
 
 @app.command()
 def main(
-    model_path: Path = typer.Argument(
+    result_folder: Path = typer.Argument(
         ...,
         help="Path of model.",
         show_default=False,
@@ -74,46 +94,63 @@ def main(
         help="Path of testloader.",
         show_default=False,
     ),
-    model_type: str = typer.Option(
-        "MLP", "--model-type", "-m", help="Model to use for training."
+    big_embedding:bool=typer.Option(
+        False,"--bigembedding", help=("Whether to use big embeddings or not.")
     ),
-    batch_size:int=typer.Option(
-        10, "--batch-size", "-bs", help="Batch size. Defaults to 10."
+    multiobjective:bool=typer.Option(
+        False,"--multiobjective", help=("Whether to use multiobjective or not.")
     ),
-    dim1:int=typer.Option(
-        1000, "--dim1", help="Dimension of first layer. Defaults to 1000."
-    ),
-    dim2:int=typer.Option(
-        1, "--dim2", help="Dimension of second layer. 1 means no second layer. Defaults to 1."
-    ),
-    dim3:int=typer.Option(
-        1, "--dim3", help="Dimension of second layer. 1 means no second layer. Defaults to 1."
-    ),
-    batch_norm:bool=typer.Option(
-        False, "--batch-norm", help="Whether to use batchnorm or not. Defaults to False."
-    ),
-    alpha:str=typer.Option(
-        4.5, "--alpha", help="Alpha distance to use for labels. Default to 4.5."
-    )
 ) -> None:
-    result_folder=model_path.parents[0]
+    model_path = result_folder / Path("checkpoint.pt")
     print(result_folder.as_posix())
     args_dict = {
         "model_path": str(model_path),
         "test_folder_path": str(test_folder_path),
         "result_folder": str(result_folder),
-        "alpha":alpha,
     }
+    with open(result_folder/Path("summary_dict.json")) as f:
+        summary_dict=json.load(f)
+    dims=summary_dict["dims"]
+    dropouts=summary_dict["dropouts"]
+    batchnorm = summary_dict["batchnorm"]
+    batch_size = summary_dict["batch_size"]
+    alpha=summary_dict["alpha"]
     with open(test_folder_path / Path("dict.json")) as f :
         dict_test = json.load(f)
     test_embeddings = torch.load(test_folder_path / Path("embeddings.pt"), weights_only=True)
     test_loader = create_dataloader(dataset_dict=dict_test, residue_embeddings=test_embeddings, batch_size=batch_size, alpha=alpha)
     #torch.save(test_loader, result_folder / Path(f'test_dataloader_batchsize_{batch_size}.pkl'))
-
-    if model_type=="MLP":
-        model = MLP(dim1=dim1, dim2=dim2,dim3=dim3, batch_norm=batch_norm)
+    dims=dims.split(",")
+    dims=[int(each) for each in dims]
+    dropouts=dropouts.split(",")
+    dropouts=[float(each) for each in dropouts]
+    print(dims)
+    if big_embedding :
+        input_size = 2528
     else:
-        raise ValueError("No model of this name known.")
+        input_size = 2048
+    layers=[]
+    for i, _ in enumerate(dims):
+        if i==0:
+            layers.append(Linear(input_size, dims[i]))
+            layers.append(Dropout(dropouts[i]))
+            if batchnorm:
+                layers.append(BatchNorm1d)
+            layers.append(ReLU())
+
+        else :
+            layers.append(Linear(dims[i-1], dims[i]))
+            layers.append(Dropout(dropouts[i]))
+            if batchnorm:
+                layers.append(BatchNorm1d)
+            layers.append(ReLU())
+    if multiobjective:
+        model=Sequential(Sequential(*layers), Sequential(Linear(dims[-1],1),Sigmoid()))
+    else:
+        layers.append(Linear(dims[-1],1))
+        layers.append(Sigmoid())
+        model = Sequential(*layers)
+
     print("LOADING MODEL")
     model.load_state_dict(torch.load(model_path, weights_only=True))
     model.eval()
@@ -121,6 +158,7 @@ def main(
     outputs_and_labels, auc, ap = test(
         model=model,
         test_loader=test_loader,
+        big_embedding=big_embedding,
     )
     args_dict["ap"]=ap
     args_dict["auc"]=auc

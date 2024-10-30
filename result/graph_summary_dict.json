@@ -1,0 +1,14 @@
+{
+    "train_folder_path": "/home/gathenes/paragraph_benchmark/241026_expanded/train_set",
+    "val_folder_path": "/home/gathenes/paragraph_benchmark/241026_expanded/val_set",
+    "learning_rate": 0.001,
+    "n_epochs": 2,
+    "result_folder": "result",
+    "positive_weight": 1.0,
+    "batch_size": 10,
+    "override": false,
+    "alpha": "4.5",
+    "seed": 0,
+    "best_epoch": "2",
+    "best_ap": "0.6368949631685064"
+}
