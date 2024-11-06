@@ -4,7 +4,7 @@ train=/home/gathenes/paragraph_benchmark/convex_hull/train_set
 val=/home/gathenes/paragraph_benchmark/convex_hull/val_set
 test=/home/gathenes/paragraph_benchmark/convex_hull/test_set
 folder=/home/gathenes/paragraph_benchmark/convex_hull
-lrs=("0.00001")
+lrs=("0.001" "0.0001" "0.00001")
 batch_norms=("")
 dropouts=("0.4,0.3,0.2")
 maskprobs=("0.4")
@@ -14,9 +14,9 @@ seeds=("0")
 l2_pens=("0")
 weights=("1" "3")
 bigembeddings=("--bigembedding")
-convexs=("")
+convexs=("--convex")
 distances=("")
-alphas=("5" "4,5,6" "4,5,5.5,6,6.5" "3,3.5,4,5,5.5,6,6.5,7,7.5")
+alphas=("4,5,6" "4,5,5.5,6,6.5")
 
 # Loop through the array
 for lr in "${lrs[@]}"; do

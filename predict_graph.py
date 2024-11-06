@@ -11,7 +11,7 @@ from models import MLP
 from torch.nn import BatchNorm1d, Dropout, Linear, ReLU, Sequential, Sigmoid
 from torch_dataset import ParatopePredictDataset
 from tqdm import tqdm
-from utils import read_pdb_to_dataframe
+from utils import format_pdb
 
 warnings.filterwarnings("ignore")
 app = typer.Typer(add_completion=False)
@@ -36,13 +36,14 @@ def test(
     test_loader,
     chains:pd.DataFrame,
     save_path: Path,
-    big_embedding:bool=True,
+    model_name="pred",
 ):
     # Training loop
     device = torch.device("cpu")
     pdb_dict = {}
-    total_dataframe=pd.DataFrame()
+
     with torch.no_grad():
+        total_dataframe = pd.DataFrame()
         for i, (
             embedding,
             labels,
@@ -51,68 +52,69 @@ def test(
             pdb_code,
             inverse_heavy,
             inverse_light,
-            convex_hull,
-            distances,
         ) in tqdm(enumerate(test_loader)):
             pdb_code=pdb_code[0]
-            pdb_dict[pdb_code]={"heavy prediction":{},"heavy label":{}, "light label":{}, "light prediction":{}, "heavy convex_hull":{}, "light convex_hull":{}, "heavy distances":{}, "light distances":{}}
+            pdb_dict[pdb_code]={"heavy prediction":{},"heavy label":{}, "light label":{}, "light prediction":{}}
             embedding, labels = embedding.to(device), labels.to(device)
             embedding, labels=embedding[0], labels[0]
             ran = list(range(1,heavy+1))+list(range(heavy+2, heavy+light+2))
-            emb=embedding[ran,:2048]
-            if big_embedding :
-                ran2 = list(range(1,heavy+1))+list(range(heavy+4, heavy+light+4))
-                emb2=embedding[ran2,2048:]
-                emb=torch.cat([emb,emb2], dim=1)
-            output=model(emb)
+            embedding=embedding[ran]
+            output=model(embedding)
             output=output.view(-1)
             for i in range(heavy):
-                pdb_dict[pdb_code]["heavy prediction"][inverse_heavy[i][0]]=float(output[i].detach().cpu().numpy())
-                pdb_dict[pdb_code]["heavy label"][inverse_heavy[i][0]]=float(labels[i].detach().cpu().numpy())
-                pdb_dict[pdb_code]["heavy convex_hull"][inverse_heavy[i][0]]=float(convex_hull[0][i].detach().cpu().numpy())
-                pdb_dict[pdb_code]["heavy distances"][inverse_heavy[i][0]]=float(distances[0][i].detach().cpu().numpy())
+                pdb_dict[pdb_code]["heavy prediction"][inverse_heavy[i][0]]=float(output[i])
+                pdb_dict[pdb_code]["heavy label"][inverse_heavy[i][0]]=float(labels[i])
             for i in range(light):
-                pdb_dict[pdb_code]["light prediction"][inverse_light[i][0]]=float(output[heavy+i].detach().cpu().numpy())
-                pdb_dict[pdb_code]["light label"][inverse_light[i][0]]=float(labels[heavy+i].detach().cpu().numpy())
-                pdb_dict[pdb_code]["light convex_hull"][inverse_light[i][0]]=float(convex_hull[0][heavy+i].detach().cpu().numpy())
-                pdb_dict[pdb_code]["light distances"][inverse_light[i][0]]=float(distances[0][heavy+i].detach().cpu().numpy())
+                pdb_dict[pdb_code]["light prediction"][inverse_light[i][0]]=float(output[heavy+i])
+                pdb_dict[pdb_code]["light label"][inverse_light[i][0]]=float(labels[heavy+i])
             pdb_path = f"/home/gathenes/all_structures/imgt/{pdb_code}.pdb"
-            data_pdb, _ = read_pdb_to_dataframe(pdb_path)
-            data_pdb=data_pdb.query("record_name=='ATOM'")
-            data_pdb["IMGT"]=data_pdb["residue_number"].astype(str) +data_pdb["insertion"]
+            data_pdb = format_pdb(f"/home/gathenes/all_structures/imgt/{pdb_code}.pdb").rename(columns={"Chain":"chain_id", "Res_Num":"residue_number"})
             light_chain, heavy_chain, antigen_chain = chains.query("pdb==@pdb_code")[["Lchain", "Hchain", "antigen_chain"]].values[0]
-            data_pdb_heavy=data_pdb.query("chain_id==@heavy_chain").query("residue_number<129")
-            data_pdb_light=data_pdb.query("chain_id==@light_chain").query("residue_number<128")
-            data_pdb_antigen=data_pdb.query("chain_id==@antigen_chain")
-            data_pdb_heavy["b_factor"]=data_pdb_heavy["IMGT"].map(pdb_dict[pdb_code]["heavy prediction"])
-            data_pdb_light["b_factor"]=data_pdb_light["IMGT"].map(pdb_dict[pdb_code]["light prediction"])
-            data_pdb_heavy["occupancy"]=data_pdb_heavy["IMGT"].map(pdb_dict[pdb_code]["heavy label"])
-            data_pdb_light["occupancy"]=data_pdb_light["IMGT"].map(pdb_dict[pdb_code]["light label"])
 
+            data_pdb["IMGT"] = data_pdb["residue_number"].str.replace(r'[a-zA-Z]$', '', regex=True).astype(int)
+
+
+            data_pdb_heavy=data_pdb.query("chain_id==@heavy_chain")
+            data_pdb_light=data_pdb.query("chain_id==@light_chain")
+
+            data_pdb_light=data_pdb_light.query("IMGT<128")
+            data_pdb_heavy=data_pdb_heavy.query("IMGT<129")
+
+            data_pdb_antigen=data_pdb.query("chain_id==@antigen_chain")
+
+
+            data_pdb_heavy["b_factor"]=data_pdb_heavy["residue_number"].map(pdb_dict[pdb_code]["heavy prediction"])
+            data_pdb_light["b_factor"]=data_pdb_light["residue_number"].map(pdb_dict[pdb_code]["light prediction"])
+            data_pdb_heavy["occupancy"]=data_pdb_heavy["residue_number"].map(pdb_dict[pdb_code]["heavy label"])
+            data_pdb_light["occupancy"]=data_pdb_light["residue_number"].map(pdb_dict[pdb_code]["light label"])
             data_pdb_antigen["b_factor"]=0
+            data_pdb_antigen["occupancy"]=0
             new_data_pdb = pd.concat([data_pdb_heavy, data_pdb_light, data_pdb_antigen])
+            new_data_pdb["record_name"]="ATOM"
+            new_data_pdb["blank_1"]=""
+            new_data_pdb["blank_2"]=""
+            new_data_pdb["blank_3"]=""
+            new_data_pdb["blank_4"]=""
+            new_data_pdb["alt_loc"]=""
+            new_data_pdb["insertion"]=""
+            new_data_pdb["model"]=1
+            new_data_pdb["segment_id"]=""
+            new_data_pdb["charge"]=0
+            new_data_pdb["line_idx"]=""
+            new_data_pdb = new_data_pdb.rename(columns={"Atom_Num":"atom_number","AA":"residue_name","Atom_Name":"atom_name","x":"x_coord","y":"y_coord","z":"z_coord", "Atom_type":"element_symbol"})
+            new_data_pdb = new_data_pdb.astype({"x_coord":float,"y_coord":float,"z_coord":float})
+
             atomic_df = PandasPdb().read_pdb(pdb_path)
             atomic_df = atomic_df.get_model(1)
             if len(atomic_df.df["ATOM"]) == 0:
                 raise ValueError(f"No model found for index: {1}")
-            atomic_df.df["ATOM"] = new_data_pdb.query("record_name=='ATOM'")
+            atomic_df.df["ATOM"] = new_data_pdb
             atomic_df.to_pdb(save_path / f"{pdb_code}.pdb", records = ["ATOM"])
 
-            data_pdb_heavy["convex_hull"]=data_pdb_heavy["IMGT"].map(pdb_dict[pdb_code]["heavy convex_hull"])
-            data_pdb_light["convex_hull"]=data_pdb_light["IMGT"].map(pdb_dict[pdb_code]["light convex_hull"])
-            data_pdb_heavy["distances"]=data_pdb_heavy["IMGT"].map(pdb_dict[pdb_code]["heavy distances"])
-            data_pdb_light["distances"]=data_pdb_light["IMGT"].map(pdb_dict[pdb_code]["light distances"])
-
-
-            data_pdb_heavy["chain_type"]="heavy"
-            data_pdb_light["chain_type"]="light"
-            pdb_to_concat = pd.concat([data_pdb_heavy,data_pdb_light]).rename(columns={"occupancy":"labels", "b_factor":"prediction"})
-            pdb_to_concat["pdb"]=pdb_code
-            pdb_to_concat = pdb_to_concat.query("atom_name=='CA'")[["pdb","chain_type","residue_name","IMGT","labels", "prediction", "convex_hull", "distances"]]
-
-            total_dataframe=pd.concat([total_dataframe, pdb_to_concat])
-
-    return total_dataframe
+            chain_ids=[heavy_chain, light_chain]
+            antibody_only = atomic_df.df["ATOM"].query("chain_id.isin([@chain_ids])")
+            antibody_only.rename(columns={"occupancy":"labels","b_factor":model_name})
+            total_dataframe=pd.concat([total_dataframe, antibody_only])
     # Calculate the AUC score
 
 
@@ -176,13 +178,13 @@ def main(
     print("RETRIEVING RESULTS")
     save_path=result_folder / Path("visualize")
     save_path.mkdir(exist_ok=True, parents=True)
-    total_dataframe=test(
+    test(
         model=model,
         test_loader=test_loader,
         chains=chains,
         save_path=save_path,
+        model_name=str(result_folder.name)
     )
-    total_dataframe.to_csv(result_folder/Path("prediction.csv"))
 
 
 if __name__ == "__main__":

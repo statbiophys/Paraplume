@@ -1,14 +1,19 @@
+import re
 from collections import defaultdict
-from typing import Dict, List, Tuple
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from biopandas.pdb import PandasPdb
+from prody import parsePDBHeader
 from tqdm import tqdm
 
 
 def rec_dd():
     return defaultdict(rec_dd)
+
 
 amino_acid_dict = {
     "ALA": "A",
@@ -32,6 +37,7 @@ amino_acid_dict = {
     "TRP": "W",
     "TYR": "Y",
 }
+
 
 def get_binding_residues(
     df_antibody: pd.DataFrame, df_antigen: pd.DataFrame
@@ -58,7 +64,7 @@ def get_binding_residues(
 
     for row_ab, (AA, Res_Num) in enumerate(values):
         # print(AA,Res_Num)
-        if Res_Num=="nan":
+        if Res_Num == "nan":
             raise ValueError(Res_Num)
         amino_dict["positions"][Res_Num] = amino_acid_dict[AA]
         if Res_Num not in amino_dict["distances"]:
@@ -68,9 +74,13 @@ def get_binding_residues(
             amino_dict["distances"][Res_Num].append(np.min(distances[row_ab, :]))
     return amino_dict
 
+
 def get_labels(
-    positions:Dict[int,str], distances:Dict[int, List], percentile:int=0, alpha:float=4.5
-)->Tuple[List,List,List]:
+    positions: Dict[int, str],
+    distances: Dict[int, List],
+    percentile: int = 0,
+    alpha: float = 4.5,
+) -> Tuple[List, List, List]:
     """Create lists with label, aa, imgt position that all map.
 
     Args:
@@ -89,13 +99,17 @@ def get_labels(
     for pos in positions:
         sequence.append(positions[pos])
         numbers.append(pos)
-        if np.percentile(distances[pos], percentile)<= alpha:
+        if np.percentile(distances[pos], percentile) <= alpha:
             labels.append(1)
         else:
             labels.append(0)
     return labels, sequence, numbers
 
-def build_dictionary(pdbs_and_chain:pd.DataFrame)->Dict:
+
+def build_dictionary(
+    pdbs_and_chain: pd.DataFrame,
+    pdb_path: Path = Path("/home/gathenes/all_structures/imgt_renumbered_expanded"),
+) -> Dict:
     """Transform dataframe with pdb codes and heavy and light chain names into Dictionary with \
         indices mapping to heavy and light lists of matching imgt numbers, sequences and labels.
 
@@ -113,88 +127,126 @@ def build_dictionary(pdbs_and_chain:pd.DataFrame)->Dict:
         H_id = pdbs_and_chain.iloc[index]["Hchain"]
         L_id = pdbs_and_chain.iloc[index]["Lchain"]
         antigen_id = pdbs_and_chain.iloc[index]["antigen_chain"]
-        df = format_pdb(f"/home/gathenes/all_structures/imgt/{pdb_code}.pdb")
+        # changed 05/11/2024 included
+        df = format_pdb(pdb_path / Path(f"{pdb_code}.pdb"))
 
         df_chain_heavy = df.query("Chain == @H_id")
         df_chain_light = df.query("Chain == @L_id")
-        antigen_ids=antigen_id.split(";")
+        antigen_ids = antigen_id.split(";")
         df_chain_antigen = df.query("Chain.isin(@antigen_ids)")
         abr_dict_heavy = get_binding_residues(df_chain_heavy, df_chain_antigen)
-        labels_heavy_4_5, sequence_heavy, numbers_heavy = get_labels(abr_dict_heavy["positions"], abr_dict_heavy["distances"], alpha=4.5)
+        labels_heavy_4_5, sequence_heavy, numbers_heavy = get_labels(
+            abr_dict_heavy["positions"], abr_dict_heavy["distances"], alpha=4.5
+        )
         abr_dict_light = get_binding_residues(df_chain_light, df_chain_antigen)
-        labels_light_4_5, sequence_light, numbers_light = get_labels(abr_dict_light["positions"], abr_dict_light["distances"], alpha=4.5)
+        labels_light_4_5, sequence_light, numbers_light = get_labels(
+            abr_dict_light["positions"], abr_dict_light["distances"], alpha=4.5
+        )
 
-        dataset_dict[index]["pdb_code"]=pdb_code
-        inverse_number_heavy = {each : i for i,each in enumerate(numbers_heavy)}
-        inverse_number_light = {each : i for i,each in enumerate(numbers_light)}
-        left, right=1, 128
-        while str(left) not in inverse_number_heavy :
-            left+=1
+        distances_heavy = abr_dict_heavy["distances"]
+        distances_light = abr_dict_light["distances"]
+
+        dataset_dict[index]["pdb_code"] = pdb_code
+        inverse_number_heavy = {each: i for i, each in enumerate(numbers_heavy)}
+        inverse_number_light = {each: i for i, each in enumerate(numbers_light)}
+        left, right = 1, 128
+        while str(left) not in inverse_number_heavy:
+            left += 1
         while str(right) not in inverse_number_heavy:
-            right-=1
-        heavy_left, heavy_right = inverse_number_heavy[str(left)], inverse_number_heavy[str(right)]
-        left, right=1, 128
-        while str(left) not in inverse_number_light :
-            left+=1
+            right -= 1
+        heavy_left, heavy_right = (
+            inverse_number_heavy[str(left)],
+            inverse_number_heavy[str(right)],
+        )
+        left, right = 1, 127
+        while str(left) not in inverse_number_light:
+            left += 1
         while str(right) not in inverse_number_light:
-            right-=1
-        light_left, light_right = inverse_number_light[str(left)], inverse_number_light[str(right)]
+            right -= 1
+        light_left, light_right = (
+            inverse_number_light[str(left)],
+            inverse_number_light[str(right)],
+        )
 
-        labels_heavy_4_5, sequence_heavy, numbers_heavy = labels_heavy_4_5[heavy_left:heavy_right+1], sequence_heavy[heavy_left:heavy_right+1], numbers_heavy[heavy_left:heavy_right+1]
-        labels_light_4_5, sequence_light, numbers_light = labels_light_4_5[light_left:light_right+1], sequence_light[light_left:light_right+1], numbers_light[light_left:light_right+1]
+        labels_heavy_4_5, sequence_heavy, numbers_heavy = (
+            labels_heavy_4_5[heavy_left : heavy_right + 1],
+            sequence_heavy[heavy_left : heavy_right + 1],
+            numbers_heavy[heavy_left : heavy_right + 1],
+        )
+        labels_light_4_5, sequence_light, numbers_light = (
+            labels_light_4_5[light_left : light_right + 1],
+            sequence_light[light_left : light_right + 1],
+            numbers_light[light_left : light_right + 1],
+        )
 
-        dataset_dict[index]["H_id numbers"]=numbers_heavy
-        dataset_dict[index]["L_id numbers"]=numbers_light
+        distances_heavy = [
+            np.min(abr_dict_heavy["distances"][each])
+            for each in numbers_heavy
+            if int(re.sub(r"[a-zA-Z]$", "", each)) < 129
+        ]
+        distances_light = [
+            np.min(abr_dict_light["distances"][each])
+            for each in numbers_light
+            if int(re.sub(r"[a-zA-Z]$", "", each)) < 128
+        ]
+        dataset_dict[index]["H_id distances"] = distances_heavy
+        dataset_dict[index]["L_id distances"] = distances_light
+
+        dataset_dict[index]["H_id numbers"] = numbers_heavy
+        dataset_dict[index]["L_id numbers"] = numbers_light
 
         dataset_dict[index]["H_id sequence"] = "".join(sequence_heavy)
         dataset_dict[index]["H_id labels 4.5"] = labels_heavy_4_5
         dataset_dict[index]["L_id sequence"] = "".join(sequence_light)
         dataset_dict[index]["L_id labels 4.5"] = labels_light_4_5
 
-        for alpha in [3,3.5,4,5,5.5,6,6.5,7,7.5]:
-            labels_heavy, _, _ = get_labels(abr_dict_heavy["positions"], abr_dict_heavy["distances"], alpha=alpha)
-            labels_light, _, _ = get_labels(abr_dict_light["positions"], abr_dict_light["distances"], alpha=alpha)
-            labels_heavy = labels_heavy[heavy_left:heavy_right+1]
-            labels_light = labels_light[light_left:light_right+1]
+        for alpha in [3, 3.5, 4, 5, 5.5, 6, 6.5, 7, 7.5]:
+            labels_heavy, _, _ = get_labels(
+                abr_dict_heavy["positions"], abr_dict_heavy["distances"], alpha=alpha
+            )
+            labels_light, _, _ = get_labels(
+                abr_dict_light["positions"], abr_dict_light["distances"], alpha=alpha
+            )
+            labels_heavy = labels_heavy[heavy_left : heavy_right + 1]
+            labels_light = labels_light[light_left : light_right + 1]
             dataset_dict[index][f"H_id labels {alpha}"] = labels_heavy
             dataset_dict[index][f"L_id labels {alpha}"] = labels_light
     return dataset_dict
 
 
-    return dataset_dict
-
 def format_pdb(pdb_file):
-    '''
+    """
     Process pdb file into pandas df
 
     Original author: Alissa Hummer
 
     :param pdb_file: file path of .pdb file to convert
     :returns: df with atomic level info
-    '''
+    """
 
     pd.options.mode.chained_assignment = None
-    pdb_whole = pd.read_csv(pdb_file,header=None,delimiter='\t')
-    pdb_whole.columns = ['pdb']
-    pdb = pdb_whole[pdb_whole['pdb'].str.startswith('ATOM')]
-    pdb['Atom_Num'] = pdb['pdb'].str[6:11].copy()
-    pdb['Atom_Name'] = pdb['pdb'].str[11:16].copy()
-    pdb['AA'] = pdb['pdb'].str[17:20].copy()
-    pdb['Chain'] = pdb['pdb'].str[20:22].copy()
-    pdb['Res_Num'] = pdb['pdb'].str[22:27].copy().str.strip()
-    pdb['x'] = pdb['pdb'].str[27:38].copy()
-    pdb['y'] = pdb['pdb'].str[38:46].copy()
-    pdb['z'] = pdb['pdb'].str[46:54].copy()#
-    pdb['Atom_type'] = pdb['pdb'].str[77].copy()
-    pdb.drop('pdb',axis=1,inplace=True)
-    pdb.replace({' ':''}, regex=True, inplace=True)
+    pdb_whole = pd.read_csv(pdb_file, header=None, delimiter="\t")
+    pdb_whole.columns = ["pdb"]
+    pdb = pdb_whole[pdb_whole["pdb"].str.startswith("ATOM")]
+    pdb["Atom_Num"] = pdb["pdb"].str[6:11].copy()
+    pdb["Atom_Name"] = pdb["pdb"].str[11:16].copy()
+    pdb["AA"] = pdb["pdb"].str[17:20].copy()
+    pdb["Chain"] = pdb["pdb"].str[20:22].copy()
+    pdb["Res_Num"] = pdb["pdb"].str[22:27].copy().str.strip()
+    pdb["x"] = pdb["pdb"].str[27:38].copy()
+    pdb["y"] = pdb["pdb"].str[38:46].copy()
+    pdb["z"] = pdb["pdb"].str[46:54].copy()  #
+    pdb["Atom_type"] = pdb["pdb"].str[77].copy()
+    pdb.drop("pdb", axis=1, inplace=True)
+    pdb.replace({" ": ""}, regex=True, inplace=True)
     pdb.reset_index(inplace=True)
-    pdb.drop('index',axis=1,inplace=True)
+    pdb.drop("index", axis=1, inplace=True)
 
     # remove H atoms from our data (interested in heavy atoms only)
-    pdb = pdb[pdb['Atom_type']!='H']
+    pdb = pdb[pdb["Atom_type"] != "H"]
 
     return pdb
+
 
 def save_plot(train_loss_list, val_loss_list, auc_list, ap_list, save_plot_path):
     n_epochs = len(train_loss_list)
@@ -229,3 +281,33 @@ def save_plot(train_loss_list, val_loss_list, auc_list, ap_list, save_plot_path)
     # Adjust layout to avoid overlap
     plt.tight_layout()
     plt.savefig(save_plot_path)
+
+
+def read_pdb_to_dataframe(
+    pdb_path: Optional[str] = None,
+    model_index: int = 1,
+    parse_header: bool = True,
+) -> pd.DataFrame:
+    """
+    Read a PDB file, and return a Pandas DataFrame containing the atomic coordinates and metadata.
+
+    Args:
+        pdb_path (str, optional): Path to a local PDB file to read. Defaults to None.
+        model_index (int, optional): Index of the model to extract from the PDB file, in case
+            it contains multiple models. Defaults to 1.
+        parse_header (bool, optional): Whether to parse the PDB header and extract metadata.
+            Defaults to True.
+
+    Returns:
+        pd.DataFrame: A DataFrame containing the atomic coordinates and metadata, with one row
+            per atom
+    """
+    atomic_df = PandasPdb().read_pdb(pdb_path)
+    if parse_header:
+        header = parsePDBHeader(pdb_path)
+    else:
+        header = None
+    atomic_df = atomic_df.get_model(model_index)
+    if len(atomic_df.df["ATOM"]) == 0:
+        raise ValueError(f"No model found for index: {model_index}")
+    return pd.concat([atomic_df.df["ATOM"], atomic_df.df["HETATM"]]), header

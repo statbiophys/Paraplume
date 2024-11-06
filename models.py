@@ -5,35 +5,10 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from EGNN import EGNN
 from torch.nn import Sigmoid
 from torch_geometric.data import Data
 from torch_geometric.nn import TransformerConv
-
-
-class TransformerGNN(nn.Module):
-    def __init__(self, in_channels, hidden_channels, out_channels, num_layers=3, heads=4):
-        super(TransformerGNN, self).__init__()
-        self.convs = nn.ModuleList()
-
-        # First layer transforms input features
-        self.convs.append(TransformerConv(in_channels, hidden_channels, heads=heads, concat=True))
-
-        # Middle layers keep the hidden feature dimension consistent
-        for _ in range(num_layers - 2):
-            self.convs.append(TransformerConv(hidden_channels * heads, hidden_channels, heads=heads, concat=True))
-
-        # Final layer reduces to output channels (class labels, in this case)
-        self.convs.append(TransformerConv(hidden_channels * heads, out_channels, heads=1, concat=False))
-
-    def forward(self, data: Data):
-        x, edge_index = data.x, data.edge_index
-        for conv in self.convs[:-1]:
-            x = conv(x, edge_index)
-            x = torch.relu(x)
-        x = self.convs[-1](x, edge_index)  # No activation on the final layer
-        return x
-
-
 
 
 class EarlyStopping:
@@ -79,52 +54,88 @@ class EarlyStopping:
             self.counter = 0
             torch.save(model.state_dict(), self.path.as_posix())
 
-class MLP(nn.Module):
-    def __init__(self, dropout_prob=0, dim1 = 1000, dim2=1, dim3=1, batch_norm=False):
-        super(MLP, self).__init__()
-        self.batch_norm=batch_norm
-        self.one_hidden=dim2==1
-        self.two_hidden = (dim2>1 and dim3==1)
-        self.three_hidden = dim3>1
-        self.dropout = nn.Dropout(p=dropout_prob)
-        self.l1 = nn.Linear(2048, dim1)
-        self.l2 = nn.Linear(dim1, dim2)
-        self.l3 = nn.Linear(dim2,dim3)
-        self.l4 = nn.Linear(dim3,1)
-        self.bn1 = nn.BatchNorm1d(dim1)  # Batch normalization for first layer
-        self.bn2 = nn.BatchNorm1d(dim2)
-        self.bn3 = nn.BatchNorm1d(dim3)
+class EGNN_Model(nn.Module):
+    '''
+    Paragraph uses equivariant graph layers with skip connections
+    '''
+    def __init__(
+        self,
+        num_feats,
+        edge_dim = 1,
+        output_dim = 1,
+        graph_hidden_layer_output_dims = None,
+        linear_hidden_layer_output_dims = None,
+        update_coors = False,
+        dropout = 0.0,
+        m_dim = 16
+    ):
+        super(EGNN_Model, self).__init__()
 
-    def forward(self, x):
-        x1=self.l1(x)
-        if self.batch_norm:
-            x1=self.bn1(x1)
-        x2=self.l2(self.dropout(F.relu(x1)))
-        if self.one_hidden :
-            x=x2
-            return torch.sigmoid(x)
-        if self.batch_norm:
-            x2=self.bn2(x2)
-        x3 = self.l3(self.dropout(F.relu(x2)))
-        if self.two_hidden:
-            x=x3
-            return torch.sigmoid(x)
-        if self.batch_norm:
-            x3=self.bn3(x3)
-        x4 = self.l4(self.dropout(F.relu(x3)))
-        return torch.sigmoid(x4)
+        self.input_dim = num_feats
+        self.output_dim = output_dim
+        current_dim = num_feats
 
-class MLP_final(nn.Module):
-    def __init__(self, dim = 3):
-        super(MLP_final, self).__init__()
-        self.l1 = nn.Linear(dim,3)
-        with torch.no_grad():
-            print(self.l1.weight.shape)# Disable gradient updates during initialization
-            self.l1.weight.fill_(0)  # Set all weights to 0 initially
-            self.l1.weight[:,0] = 1  # Set the first weight to 1
-            self.l1.bias.fill_(0)
-        self.l2 = nn.Linear(3, 1)
+        # these will store the different layers of out model
+        self.graph_layers = nn.ModuleList()
+        self.linear_layers = nn.ModuleList()
 
-    def forward(self, x):
-        return torch.sigmoid(self.l2(F.relu(self.l1(x))))
-        #return torch.sigmoid(self.l1(x))
+        # model with 1 standard EGNN and single dense layer if no architecture provided
+        if graph_hidden_layer_output_dims == None: graph_hidden_layer_output_dims = [num_feats]
+        if linear_hidden_layer_output_dims == None: linear_hidden_layer_output_dims = []
+
+        # graph layers
+        for hdim in graph_hidden_layer_output_dims:
+            self.graph_layers.append(EGNN(dim = current_dim,
+                                        edge_dim = edge_dim,
+                                        update_coors = update_coors,
+                                        dropout = dropout,
+                                        m_dim = m_dim))
+            current_dim = hdim
+
+        # dense layers
+        for hdim in linear_hidden_layer_output_dims:
+            self.linear_layers.append(nn.Linear(in_features = current_dim,
+                                                out_features = hdim))
+            current_dim = hdim
+
+        # final layer to get to per-node output
+        self.linear_layers.append(nn.Linear(in_features = current_dim, out_features = output_dim))
+
+
+    def forward(self, feats, coors, edges, mask=None):
+
+        # graph layers
+        for layer in self.graph_layers:
+            feats = F.hardtanh(layer(feats, coors, edges, mask))
+
+        # dense layers
+        for layer in self.linear_layers[:-1]:
+            feats = F.hardtanh(layer(feats))
+
+        # output (i.e. prediction)
+        feats = self.linear_layers[-1](feats)
+
+        return feats
+
+class TransformerGNN(nn.Module):
+    def __init__(self, in_channels, hidden_channels, out_channels, num_layers=3, heads=4):
+        super(TransformerGNN, self).__init__()
+        self.convs = nn.ModuleList()
+
+        # First layer transforms input features
+        self.convs.append(TransformerConv(in_channels, hidden_channels, heads=heads, concat=True))
+
+        # Middle layers keep the hidden feature dimension consistent
+        for _ in range(num_layers - 2):
+            self.convs.append(TransformerConv(hidden_channels * heads, hidden_channels, heads=heads, concat=True))
+
+        # Final layer reduces to output channels (class labels, in this case)
+        self.convs.append(TransformerConv(hidden_channels * heads, out_channels, heads=1, concat=False))
+
+    def forward(self, data: Data):
+        x, edge_index = data.x, data.edge_index
+        for conv in self.convs[:-1]:
+            x = conv(x, edge_index)
+            x = torch.relu(x)
+        x = self.convs[-1](x, edge_index)  # No activation on the final layer
+        return x

@@ -1,18 +1,18 @@
 #!/bin/bash
 
-train=/home/gathenes/paragraph_benchmark/241026_expanded/train_set
-val=/home/gathenes/paragraph_benchmark/241026_expanded/val_set
-test=/home/gathenes/paragraph_benchmark/241026_expanded/test_set
-folder=/home/gathenes/paragraph_benchmark/241026_expanded
-lrs=("0.00002" )
+train=/home/gathenes/paragraph_benchmark/convex_hull/train_set
+val=/home/gathenes/paragraph_benchmark/convex_hull/val_set
+test=/home/gathenes/paragraph_benchmark/convex_hull/test_set
+folder=/home/gathenes/paragraph_benchmark/convex_hull
+lrs=("0.0001" "0.0005" "0.001")
 batch_norms=("")
-dropouts=("0.2,0.2")
+dropouts=("0.2,0.2" "0.3,0.3" "0.4,0.3")
 maskprobs=("0.4")
-batchsizes=("20" "30")
-dims=("2000,1000" "4000,2000")
+batchsizes=("15" "20" "25")
+dims=("500,250" "400,200" "300,150" "200,100")
 alphas=("4.5")
 seeds=("0")
-l2_pens=("0")
+l2_pens=("0" "0.000001" )
 weights=("1")
 bigembeddings=("--bigembedding" )
 
