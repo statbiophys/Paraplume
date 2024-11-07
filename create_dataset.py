@@ -1,5 +1,4 @@
 import json
-from collections import defaultdict
 from pathlib import Path
 from typing import Dict
 
@@ -13,13 +12,12 @@ from utils import build_dictionary
 
 app = typer.Typer(add_completion=False)
 
-def rec_dd():
-    return defaultdict(rec_dd)
 
 def create_dictionary(
     pdb_dataframe: pd.DataFrame,
     save_path : Path = Path("/home/gathenes/all_structures/data_high_qual/dataset_dict_241003.json"),
     pdbs_only: bool = False,
+    pdb_folder_path:Path=Path("/home/gathenes/all_structures/imgt_renumbered_expanded"),
 )-> Dict:
     """Create dictionary with indices mapping to heavy and light lists of matching imgt numbers, \
             sequences and labels.
@@ -28,6 +26,7 @@ def create_dictionary(
         pdb_dataframe (pd.DataFrame): Dataframe to use to create dataset.
         save_path (Path): Path where to save dictionary.
         pdbs_only (bool): Use only the pdbs and add all chains. Default to False.
+        pdb_folder_path (Path): Path of pdb files.
 
     Returns:
         (Dict) : Dictionary with indices mapping to heavy and light lists of matching imgt numbers,\
@@ -48,7 +47,7 @@ def create_dictionary(
 
 
     print("BUILDING DICTIONARY")
-    dataset_dict = build_dictionary(pdbs_and_chain=pdbs_and_chain)
+    dataset_dict = build_dictionary(pdbs_and_chain=pdbs_and_chain, pdb_folder_path=pdb_folder_path)
     with open(save_path, "w") as f:
         json.dump(dataset_dict, f)
     with open(save_path) as f:
@@ -65,12 +64,13 @@ def create_embeddings(
     Args:
         dataset_dict_path (Dict): Dictionary mapping index to heavy and light aa sequence.
         save_path (Path): Path where to save embeddings.
-        max_length (int): Max length of your paired sequences.
     """
     print("CREATING EMBEDDINGS")
     sequence_heavy_emb = [dataset_dict[index]["H_id sequence"] for index in dataset_dict]
     sequence_light_emb = [dataset_dict[index]["L_id sequence"] for index in dataset_dict]
-    ##################################################
+    ########################################################
+    ######################## BERT ##########################
+    ########################################################
     bert_tokeniser = BertTokenizer.from_pretrained("Exscientia/IgBert", do_lower_case=False)
     bert_model = BertModel.from_pretrained("Exscientia/IgBert", add_pooling_layer=False)
     paired_sequences = []
@@ -91,7 +91,9 @@ def create_embeddings(
             input_ids=tokens["input_ids"], attention_mask=tokens["attention_mask"]
         )
         bert_residue_embeddings = output.last_hidden_state
-    ##################################################
+    ########################################################
+    ###################### IGT5 ############################
+    ########################################################
     igt5_tokeniser = T5Tokenizer.from_pretrained("Exscientia/IgT5", do_lower_case=False)
     igt5_model = T5EncoderModel.from_pretrained("Exscientia/IgT5")
 
@@ -108,7 +110,9 @@ def create_embeddings(
             input_ids=tokens["input_ids"], attention_mask=tokens["attention_mask"]
         )
         igt5_residue_embeddings = output.last_hidden_state
-
+    ########################################################
+    ##################### ABLANG ###########################
+    ########################################################
     ablang = ablang2.pretrained()
     all_seqs=[]
     for seq_heavy, seq_light in zip(sequence_heavy_emb, sequence_light_emb):
@@ -117,11 +121,8 @@ def create_embeddings(
         )
     ablang_embeddings=ablang(all_seqs, mode='rescoding', stepwise_masking = False)
     ablang_embeddings = [np.pad(each, ((0, 280-each.shape[0]),(0,0)), 'constant', constant_values=((0,0),(0,0))) for each in ablang_embeddings]
-
     ablang_embeddings = torch.Tensor(np.stack(ablang_embeddings))
-
     residue_embeddings = torch.cat([bert_residue_embeddings, igt5_residue_embeddings, ablang_embeddings], dim=2)
-
     torch.save(residue_embeddings, save_path)
     return residue_embeddings
 
@@ -140,12 +141,16 @@ def main(
     pdbs_only:bool = typer.Option(
         False, "--pdbs-only", help="Use only pdbs."
     ),
+    pdb_folder_path:Path=typer.Option(
+        "/home/gathenes/all_structures/imgt_renumbered_expanded",
+        "--pdb-folder-path", help="Pdb path for ground truth labeling."
+    )
 ) -> None:
     stem=pdb_list_path.stem
     save_folder = result_folder/Path(stem)
     save_folder.mkdir(exist_ok=True,parents=True)
     pdb_dataframe = pd.read_csv(pdb_list_path)
-    dataset_dict = create_dictionary(pdb_dataframe, save_path=save_folder / Path("dict.json"), pdbs_only=pdbs_only)
+    dataset_dict = create_dictionary(pdb_dataframe, save_path=save_folder / Path("dict.json"), pdbs_only=pdbs_only, pdb_folder_path=pdb_folder_path)
     residue_embeddings=create_embeddings(dataset_dict=dataset_dict,save_path=save_folder / Path("embeddings.pt"))
 
 if __name__ == "__main__":
