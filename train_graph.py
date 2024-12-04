@@ -1,7 +1,5 @@
 import json
-import random
 from pathlib import Path
-from typing import Dict
 
 import numpy as np
 import pandas as pd
@@ -13,42 +11,12 @@ from sklearn.metrics import (
     average_precision_score,
     roc_auc_score,
 )
-from torch.utils.data import DataLoader
-from torch_dataset import AminoAcidGraphEGNN
+from torch_dataset import create_graph_dataloader
 from tqdm import tqdm
 from utils import save_plot
 
 app = typer.Typer(add_completion=False)
 
-
-def create_dataloader(
-    pdb_folder_path: Path,
-    dataset_dict: Dict,
-    residue_embeddings: torch.Tensor,
-    csv,
-    batch_size=1,
-    shuffle: bool = False,
-    features="one-hot",
-) -> torch.utils.data.dataloader.DataLoader:
-    """Take dataset_dict and embeddings and return dataloader.
-
-    Args:
-        dataset_dict (Dict): _description_
-        residue_embeddings (torch.Tensor): _description_
-        batch_size (int, optional): _description_. Defaults to 10.
-
-    Returns:
-        torch.utils.data.dataloader.DataLoader: Dataloader to use for training.
-    """
-    dataset = AminoAcidGraphEGNN(
-        dataset_dict=dataset_dict,
-        residue_embeddings=residue_embeddings,
-        csv=csv,
-        pdb_folder_path=pdb_folder_path,
-        features=features,
-    )
-    dataset_loader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
-    return dataset_loader
 
 
 def train(
@@ -72,7 +40,7 @@ def train(
     for epoch in range(n_epochs):
         model.train()
         train_loss = 0
-        for j, ((feats, coors, edges), labels) in enumerate(tqdm(train_loader)):
+        for j, ((feats, coors, edges), labels, _,_,_) in enumerate(tqdm(train_loader)):
 
             if (j + 1) % 16 == 0 or (j + 1) == len(train_loader):
                 optimizer.zero_grad()
@@ -97,7 +65,7 @@ def train(
         all_targets = []
         with torch.no_grad():
             model.eval()
-            for (feats, coors, edges), labels in tqdm(val_loader):
+            for (feats, coors, edges), labels, _,_,_ in tqdm(val_loader):
                 if infer_edges:
                     pred = model(feats, coors, edges=None)
                 else:
@@ -169,9 +137,14 @@ def main(
         4.5, "--alpha", help="Alpha distance to use for labels. Default to 4.5."
     ),
     seed: int = typer.Option(0, "--seed", help="Seed to use for training."),
-    pdb_folder_path: Path = typer.Option(
+    pdb_folder_path_val: Path = typer.Option(
         "/home/gathenes/paragraph_benchmark/abb3_pdbs_renumbered",
-        "--pdb-folder-path",
+        "--pdb-folder-path-val",
+        help="Pdb folder path.",
+    ),
+    pdb_folder_path_train: Path = typer.Option(
+        "/home/gathenes/all_structures/imgt_renumbered_expanded/",
+        "--pdb-folder-path-train",
         help="Pdb folder path.",
     ),
     features: str = typer.Option(
@@ -180,7 +153,12 @@ def main(
     infer_edges: bool = typer.Option(
         False, "--infer-edges", help="Infer edges instead of using sparse graph."
     ),
+    dropout:float=typer.Option(
+        0,"--dropout", help="Dropout for EGNN. Defaults to 0."
+    ),
 ) -> None:
+    if seed>0:
+        torch.manual_seed(seed)
     if (result_folder / Path("summary_dict.json")).exists() and not override:
         print("Not overriding results.")
         return
@@ -198,13 +176,14 @@ def main(
         "override": override,
         "alpha": alpha,
         "seed": seed,
-        "featres": features,
+        "features": features,
         "infer-edges": infer_edges,
-        "pdb_data_folder": pdb_folder_path,
+        "pdb_folder_path_val": str(pdb_folder_path_val),
+        "dropout":dropout,
     }
     if seed > 0:
         torch.manual_seed(seed)
-    with open(train_folder_path / Path("dict.json")) as f:
+    with open(train_folder_path / Path("dict.json"), encoding="utf-8") as f:
         dict_train = json.load(f)
     train_embeddings = torch.load(
         train_folder_path / Path("embeddings.pt"), weights_only=True
@@ -213,7 +192,7 @@ def main(
         "/home/gathenes/paragraph_benchmark/expanded_dataset/train_set.csv"
     )
 
-    with open(val_folder_path / Path("dict.json")) as f:
+    with open(val_folder_path / Path("dict.json"), encoding="utf-8") as f:
         dict_val = json.load(f)
     val_embeddings = torch.load(
         val_folder_path / Path("embeddings.pt"), weights_only=True
@@ -236,21 +215,21 @@ def main(
     else:
         edge_dim = 1
 
-    train_loader = create_dataloader(
+    train_loader = create_graph_dataloader(
         csv=train_csv,
         dataset_dict=dict_train,
-        residue_embeddings=train_embeddings,
+        embeddings=train_embeddings,
         batch_size=batch_size,
         shuffle=True,
-        pdb_folder_path=pdb_folder_path,
+        pdb_folder_path=pdb_folder_path_train,
         features=features,
     )
-    val_loader = create_dataloader(
+    val_loader = create_graph_dataloader(
         csv=val_csv,
         dataset_dict=dict_val,
-        residue_embeddings=val_embeddings,
+        embeddings=val_embeddings,
         batch_size=batch_size,
-        pdb_folder_path=pdb_folder_path,
+        pdb_folder_path=pdb_folder_path_val,
         features=features,
     )
     pos_weight = torch.tensor(
@@ -263,6 +242,7 @@ def main(
         graph_hidden_layer_output_dims=[feature_dim] * 6,
         linear_hidden_layer_output_dims=[10] * 2,
         edge_dim=edge_dim,
+        dropout=dropout,
     )
 
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
@@ -288,7 +268,7 @@ def main(
     best_epoch = np.argmax(ap_list)
     args_dict["best_epoch"] = str(best_epoch + 1)
     args_dict["best_ap"] = str(ap_list[best_epoch])
-    with open(result_folder / Path("graph_summary_dict.json"), "w") as json_file:
+    with open(result_folder / Path("graph_summary_dict.json"), "w", encoding="utf-8") as json_file:
         json.dump(args_dict, json_file, indent=4)
 
 

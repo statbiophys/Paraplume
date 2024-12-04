@@ -1,45 +1,28 @@
 import json
 import random
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Optional
 
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import typer
+from models import EarlyStopping
 from sklearn.metrics import (
     average_precision_score,
     roc_auc_score,
 )
 from torch.nn import BatchNorm1d, Dropout, Linear, ReLU, Sequential, Sigmoid
 from torch.optim.lr_scheduler import CosineAnnealingLR, ReduceLROnPlateau, StepLR
+from torch_dataset import create_dataloader
 from torchjd import mtl_backward
 from torchjd.aggregation import UPGrad
 from tqdm import tqdm
-
-from models import EarlyStopping
-from torch_dataset import ParatopeDataset, ParatopeMultiObjectiveDataset
 from utils import save_plot
 
 app = typer.Typer(add_completion=False)
 
-def create_dataloader(dataset_dict:Dict,residue_embeddings:torch.Tensor, batch_size=10, shuffle:bool=False, alpha:str="4.5", alphas=[], multi_objective=False)->torch.utils.data.dataloader.DataLoader:
-    """Take dataset_dict and embeddings and return dataloader.
-
-    Args:
-        dataset_dict (Dict): _description_
-        residue_embeddings (torch.Tensor): _description_
-        batch_size (int, optional): _description_. Defaults to 10.
-
-    Returns:
-        torch.utils.data.dataloader.DataLoader: Dataloader to use for training.
-    """
-    if multi_objective:
-        dataset=ParatopeMultiObjectiveDataset(dataset_dict=dataset_dict, residue_embeddings=residue_embeddings, alpha=alpha, alphas=alphas)
-    else:
-        dataset=ParatopeDataset(dataset_dict=dataset_dict, residue_embeddings=residue_embeddings, alpha=alpha)
-    dataset_loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
-    return dataset_loader
 
 def train_multiobjective(
     shared_module,
@@ -58,6 +41,7 @@ def train_multiobjective(
     big_embedding=False,
     convex=False,
     distance=False,
+    patience=0,
 ):
     A=UPGrad()
     device = torch.device("cpu")
@@ -68,7 +52,7 @@ def train_multiobjective(
 
     criterion_cel = nn.CrossEntropyLoss()
 
-    early_stopping = EarlyStopping(patience=10, path=model_save_path, best_score=0)
+    early_stopping = EarlyStopping(patience=patience, path=model_save_path, best_score=0)
     if lr_strategy == "step":
         scheduler = StepLR(optimizer, step_size=40)
     elif lr_strategy == "plateau":
@@ -77,10 +61,12 @@ def train_multiobjective(
         scheduler = CosineAnnealingLR(optimizer, T_max=25)
     elif lr_strategy:
         raise ValueError(f"Unknown scheduler type: {lr_strategy}")
+    else :
+        scheduler=None
     for epoch in range(1, n_epochs + 1):
         train_loss = 0.0
         shared_module.train()
-        for i, (embedding, len_heavy, len_light, main_labels, labels_convex, labels_distance, *other_labels) in enumerate(tqdm(train_loader)):
+        for i, (embedding, main_labels,len_heavy, len_light,  labels_convex, labels_distance, *other_labels) in enumerate(tqdm(train_loader)):
             embedding, main_labels, labels_convex, labels_distance = embedding.to(device), main_labels.to(device),labels_convex.to(device),  labels_distance.to(device)
 
             embedding_list=[]
@@ -148,7 +134,6 @@ def train_multiobjective(
             other_losses=[]
             for other_output, other_label in zip(other_outputs, other_labels):
                 other_losses.append(criterion(other_output, other_label))
-
 
             losses=[loss_main]
             task_params = [main_task_module.parameters()]
@@ -223,14 +208,16 @@ def train_multiobjective(
         ap_list.append(ap)
 
         # Calculate the Average Precision score
-
-        early_stopping(-ap, model)
-        if early_stopping.early_stop:
-            print(f"Early stopping, last epoch = {epoch}")
-            break
+        if patience>0:
+            early_stopping(-ap, model)
+            if early_stopping.early_stop:
+                print(f"Early stopping, last epoch = {epoch}")
+                break
+        else :
+            torch.save(model.state_dict(), model_save_path.as_posix())
         if lr_strategy in ["step","cosine"]:
-            scheduler.step()  # StepLR scheduler: decrease lr after `step_size` epochs
-        elif lr_strategy == "plateau":
+                scheduler.step()  # StepLR scheduler: decrease lr after `step_size` epochs
+        if lr_strategy == "plateau":
             scheduler.step(-ap)
     return train_loss_list, val_loss_list, auc_list, ap_list
 
@@ -290,7 +277,6 @@ def main(
     ),
     l2_pen:float=typer.Option(
         0, "--l2-pen", help="L2 penalty to use for the model weights."
-
     ),
     big_embedding:bool=typer.Option(
         False,"--bigembedding", help="Whether to use big embeddings or not."
@@ -302,8 +288,13 @@ def main(
         False,"--distance", help="Whether to use distance labels or not."
     ),
     alphas:str=typer.Option(
-        "", "--alphas", help="Whether to use different alphas labels to help main label."
+        "-", "--alphas", help="Whether to use different alphas labels to help main label. \
+        Defaults to empty."
     ),
+    patience:int=typer.Option(
+        0, "--patience", help="Patience to use for early stopping. 0 means no early stopping. \
+        Defaults to 0."
+    )
 ) -> None:
     if (result_folder/Path("summary_dict.json")).exists() and not override :
         print("Not overriding results.")
@@ -331,20 +322,24 @@ def main(
         "convex":convex,
         "distance":distance,
         "alphas":alphas,
+        "patience":patience,
     }
-    alphas=alphas.split(",")
+    if alphas=="-":
+        alphas=None
+    else :
+        alphas=alphas.split(",")
     if seed>0:
         torch.manual_seed(seed)
-    with open(train_folder_path / Path("dict.json")) as f :
+    with open(train_folder_path / Path("dict.json"), encoding="utf-8") as f :
         dict_train = json.load(f)
     train_embeddings = torch.load(train_folder_path / Path("embeddings.pt"), weights_only=True)
 
-    with open(val_folder_path / Path("dict.json")) as f :
+    with open(val_folder_path / Path("dict.json"), encoding="utf-8") as f :
         dict_val = json.load(f)
     val_embeddings = torch.load(val_folder_path / Path("embeddings.pt"), weights_only=True)
 
-    train_loader = create_dataloader(dataset_dict=dict_train, residue_embeddings=train_embeddings, batch_size=batch_size, shuffle=True, alpha=alpha,multi_objective=True, alphas=alphas)
-    val_loader = create_dataloader(dataset_dict=dict_val, residue_embeddings=val_embeddings, batch_size=batch_size,multi_objective=False, alpha=alpha)
+    train_loader = create_dataloader(dataset_dict=dict_train, embeddings=train_embeddings, batch_size=batch_size, alpha=alpha, alphas=alphas, mode="train")
+    val_loader = create_dataloader(dataset_dict=dict_val, embeddings=val_embeddings, batch_size=batch_size, alpha=alpha,mode="test")
     if big_embedding :
         input_size = 2528
     else:
@@ -371,12 +366,6 @@ def main(
     main_task_module = Sequential(Linear(dims[-1], 1))
     convex_task_module = Sequential(Linear(dims[-1], 1), Sigmoid())
     distance_task_module= Sequential(Linear(dims[-1], 1), Sigmoid())
-
-    other_tasks=[]
-    for i in range(len(alphas)):
-        other_task=Sequential(Linear(dims[-1], 1))
-        other_tasks.append(other_task)
-
     params = [
         *shared_module.parameters(),
         *main_task_module.parameters()]
@@ -384,14 +373,17 @@ def main(
         params+=[*convex_task_module.parameters()]
     if distance:
         params+=[*distance_task_module.parameters()]
-    for i in range(len(alphas)):
-        params+=[*other_tasks[i].parameters()]
+
+    other_tasks=[]
+    if alphas:
+        for i in range(len(alphas)):
+            other_task=Sequential(Linear(dims[-1], 1))
+            params+=[*other_task.parameters()]
+            other_tasks.append(other_task)
 
     criterion = nn.BCEWithLogitsLoss(
         pos_weight=torch.tensor([positive_weight], device=torch.device("cpu"))
     )
-
-
     optimizer = torch.optim.Adam(params, lr=learning_rate, weight_decay=l2_pen)
     model_save_path = result_folder / Path("checkpoint.pt")
     train_loss_list, val_loss_list, auc_list, ap_list = train_multiobjective(
@@ -411,6 +403,7 @@ def main(
         big_embedding=big_embedding,
         convex=convex,
         distance=distance,
+        patience=patience,
     )
 
     save_plot_path = result_folder / Path("summary_plot.png")
@@ -424,7 +417,7 @@ def main(
     best_epoch = np.argmax(ap_list)
     args_dict["best_epoch"] = str(best_epoch + 1)
     args_dict["best_ap"] = str(ap_list[best_epoch])
-    with open(result_folder / Path("summary_dict.json"), 'w') as json_file:
+    with open(result_folder / Path("summary_dict.json"), 'w', encoding="utf-8") as json_file:
         json.dump(args_dict, json_file, indent=4)
 
 if __name__ == "__main__":

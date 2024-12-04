@@ -10,25 +10,10 @@ from sklearn.metrics import (
     roc_auc_score,
 )
 from torch.nn import BatchNorm1d, Dropout, Linear, ReLU, Sequential, Sigmoid
-from torch_dataset import ParatopeDataset, ParatopeMultiObjectiveDataset
+from torch_dataset import create_dataloader
 from tqdm import tqdm
 
 app = typer.Typer(add_completion=False)
-
-def create_dataloader(dataset_dict:Dict,residue_embeddings:torch.Tensor, batch_size=10, shuffle:bool=False, alpha:str="4.5")->torch.utils.data.dataloader.DataLoader:
-    """Take dataset_dict and embeddings and return dataloader.
-
-    Args:
-        dataset_dict (Dict): _description_
-        residue_embeddings (torch.Tensor): _description_
-        batch_size (int, optional): _description_. Defaults to 10.
-
-    Returns:
-        torch.utils.data.dataloader.DataLoader: Dataloader to use for training.
-    """
-    dataset = ParatopeDataset(dataset_dict=dataset_dict, residue_embeddings=residue_embeddings, alpha=alpha)
-    dataset_loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
-    return dataset_loader
 
 def test(
     model,
@@ -41,7 +26,7 @@ def test(
     all_targets = []
     outputs_and_labels = {}
     with torch.no_grad():
-        for i, (
+        for _, (
             embedding,
             labels,
             len_heavy,
@@ -75,6 +60,7 @@ def test(
     # Converting lists to numpy arrays for AUC and ROC calculation
     all_outputs = np.array(all_outputs)
     all_targets = np.array(all_targets).astype(int)
+
     # Calculate the AUC score
     auc = roc_auc_score(all_targets, all_outputs)
     ap = average_precision_score(all_targets, all_outputs)
@@ -97,9 +83,6 @@ def main(
     big_embedding:bool=typer.Option(
         False,"--bigembedding", help=("Whether to use big embeddings or not.")
     ),
-    multiobjective:bool=typer.Option(
-        False,"--multiobjective", help=("Whether to use multiobjective or not.")
-    ),
 ) -> None:
     model_path = result_folder / Path("checkpoint.pt")
     print(result_folder.as_posix())
@@ -108,18 +91,17 @@ def main(
         "test_folder_path": str(test_folder_path),
         "result_folder": str(result_folder),
     }
-    with open(result_folder/Path("summary_dict.json")) as f:
+    with open(result_folder/Path("summary_dict.json"), encoding="utf-8") as f:
         summary_dict=json.load(f)
     dims=summary_dict["dims"]
     dropouts=summary_dict["dropouts"]
     batchnorm = summary_dict["batchnorm"]
     batch_size = summary_dict["batch_size"]
     alpha=summary_dict["alpha"]
-    with open(test_folder_path / Path("dict.json")) as f :
+    with open(test_folder_path / Path("dict.json"), encoding="utf-8") as f :
         dict_test = json.load(f)
     test_embeddings = torch.load(test_folder_path / Path("embeddings.pt"), weights_only=True)
-    test_loader = create_dataloader(dataset_dict=dict_test, residue_embeddings=test_embeddings, batch_size=batch_size, alpha=alpha)
-    #torch.save(test_loader, result_folder / Path(f'test_dataloader_batchsize_{batch_size}.pkl'))
+    test_loader = create_dataloader(dataset_dict=dict_test, embeddings=test_embeddings, batch_size=batch_size, alpha=alpha, mode="test")
     dims=dims.split(",")
     dims=[int(each) for each in dims]
     dropouts=dropouts.split(",")
@@ -144,12 +126,8 @@ def main(
             if batchnorm:
                 layers.append(BatchNorm1d)
             layers.append(ReLU())
-    if multiobjective:
-        model=Sequential(Sequential(*layers), Sequential(Linear(dims[-1],1),Sigmoid()))
-    else:
-        layers.append(Linear(dims[-1],1))
-        layers.append(Sigmoid())
-        model = Sequential(*layers)
+    model=Sequential(Sequential(*layers), Sequential(Linear(dims[-1],1),Sigmoid()))
+
 
     print("LOADING MODEL")
     model.load_state_dict(torch.load(model_path, weights_only=True))
@@ -165,7 +143,7 @@ def main(
     args_dict["detailed_results"]=outputs_and_labels
 
     print("SAVING RESULTS")
-    with open(result_folder / Path("results_dict.json"), "w") as json_file:
+    with open(result_folder / Path(f"{test_folder_path.stem}_results_dict.json"), "w", encoding="utf-8") as json_file:
         json.dump(args_dict, json_file, indent=4)
 
 

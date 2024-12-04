@@ -1,4 +1,3 @@
-
 from pathlib import Path
 
 import numpy as np
@@ -6,7 +5,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from EGNN import EGNN
-from torch.nn import Sigmoid
 from torch_geometric.data import Data
 from torch_geometric.nn import TransformerConv
 

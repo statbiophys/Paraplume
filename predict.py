@@ -1,35 +1,18 @@
 import json
 import warnings
 from pathlib import Path
-from typing import Dict
 
 import pandas as pd
 import torch
 import typer
 from biopandas.pdb import PandasPdb
-from models import MLP
 from torch.nn import BatchNorm1d, Dropout, Linear, ReLU, Sequential, Sigmoid
-from torch_dataset import ParatopePredictDataset
+from torch_dataset import create_dataloader
 from tqdm import tqdm
 from utils import read_pdb_to_dataframe
 
 warnings.filterwarnings("ignore")
 app = typer.Typer(add_completion=False)
-
-def create_dataloader(dataset_dict:Dict,residue_embeddings:torch.Tensor, batch_size=10, shuffle:bool=False, alpha:str="4.5")->torch.utils.data.dataloader.DataLoader:
-    """Take dataset_dict and embeddings and return dataloader.
-
-    Args:
-        dataset_dict (Dict): _description_
-        residue_embeddings (torch.Tensor): _description_
-        batch_size (int, optional): _description_. Defaults to 10.
-
-    Returns:
-        torch.utils.data.dataloader.DataLoader: Dataloader to use for training.
-    """
-    dataset = ParatopePredictDataset(dataset_dict=dataset_dict, residue_embeddings=residue_embeddings, alpha=alpha)
-    dataset_loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
-    return dataset_loader
 
 def test(
     model,
@@ -37,6 +20,7 @@ def test(
     chains:pd.DataFrame,
     save_path: Path,
     big_embedding:bool=True,
+    pdb_path : Path = Path("/home/gathenes/all_structures/imgt_renumbered_expanded/"),
 ):
     # Training loop
     device = torch.device("cpu")
@@ -76,10 +60,7 @@ def test(
                 pdb_dict[pdb_code]["light label"][inverse_light[i][0]]=float(labels[heavy+i].detach().cpu().numpy())
                 pdb_dict[pdb_code]["light convex_hull"][inverse_light[i][0]]=float(convex_hull[0][heavy+i].detach().cpu().numpy())
                 pdb_dict[pdb_code]["light distances"][inverse_light[i][0]]=float(distances[0][heavy+i].detach().cpu().numpy())
-            pdb_path = f"/home/gathenes/all_structures/imgt/{pdb_code}.pdb"
-            data_pdb, _ = read_pdb_to_dataframe(pdb_path)
-            data_pdb=data_pdb.query("record_name=='ATOM'")
-            data_pdb["IMGT"]=data_pdb["residue_number"].astype(str) +data_pdb["insertion"]
+            data_pdb= read_pdb_to_dataframe((pdb_path / Path(f"{pdb_code}.pdb")).as_posix())
             light_chain, heavy_chain, antigen_chain = chains.query("pdb==@pdb_code")[["Lchain", "Hchain", "antigen_chain"]].values[0]
             data_pdb_heavy=data_pdb.query("chain_id==@heavy_chain").query("residue_number<129")
             data_pdb_light=data_pdb.query("chain_id==@light_chain").query("residue_number<128")
@@ -88,14 +69,14 @@ def test(
             data_pdb_light["b_factor"]=data_pdb_light["IMGT"].map(pdb_dict[pdb_code]["light prediction"])
             data_pdb_heavy["occupancy"]=data_pdb_heavy["IMGT"].map(pdb_dict[pdb_code]["heavy label"])
             data_pdb_light["occupancy"]=data_pdb_light["IMGT"].map(pdb_dict[pdb_code]["light label"])
-
             data_pdb_antigen["b_factor"]=0
+            data_pdb_antigen["occupancy"]=0
+
             new_data_pdb = pd.concat([data_pdb_heavy, data_pdb_light, data_pdb_antigen])
-            atomic_df = PandasPdb().read_pdb(pdb_path)
+
+            atomic_df = PandasPdb().read_pdb((pdb_path / Path(f"{pdb_code}.pdb")).as_posix())
             atomic_df = atomic_df.get_model(1)
-            if len(atomic_df.df["ATOM"]) == 0:
-                raise ValueError(f"No model found for index: {1}")
-            atomic_df.df["ATOM"] = new_data_pdb.query("record_name=='ATOM'")
+            atomic_df.df["ATOM"] = new_data_pdb
             atomic_df.to_pdb(save_path / f"{pdb_code}.pdb", records = ["ATOM"])
 
             data_pdb_heavy["convex_hull"]=data_pdb_heavy["IMGT"].map(pdb_dict[pdb_code]["heavy convex_hull"])
@@ -111,6 +92,7 @@ def test(
             pdb_to_concat = pdb_to_concat.query("atom_name=='CA'")[["pdb","chain_type","residue_name","IMGT","labels", "prediction", "convex_hull", "distances"]]
 
             total_dataframe=pd.concat([total_dataframe, pdb_to_concat])
+
 
     return total_dataframe
     # Calculate the AUC score
@@ -133,15 +115,21 @@ def main(
         help="Path of test csv.",
         show_default=False,
     ),
+    pdb_path:Path=typer.Option(
+        "/home/gathenes/all_structures/imgt_renumbered_expanded",
+        "--pdb-folder-path",
+        help="Path of pdb folder.",
+        show_default=False,
+    )
 ) -> None:
     chains=pd.read_csv(chains_path)
     result_folder=model_path.parents[0]
     print(result_folder.as_posix())
-    with open(test_folder_path / Path("dict.json")) as f :
+    with open(test_folder_path / Path("dict.json"), encoding="utf-8") as f :
         dict_test = json.load(f)
     test_embeddings = torch.load(test_folder_path / Path("embeddings.pt"), weights_only=True)
-    test_loader = create_dataloader(dataset_dict=dict_test, residue_embeddings=test_embeddings, batch_size=1, alpha=4.5)
-    with open(result_folder / Path("summary_dict.json")) as f:
+    test_loader = create_dataloader(dataset_dict=dict_test, embeddings=test_embeddings, batch_size=1, alpha=4.5, mode="predict")
+    with open(result_folder / Path("summary_dict.json"), encoding="utf-8") as f:
         summary_dict = json.load(f)
     dims=summary_dict["dims"].split(",")
     dims=[int(each) for each in dims]
@@ -174,15 +162,16 @@ def main(
     model.load_state_dict(torch.load(model_path, weights_only=True))
     model.eval()
     print("RETRIEVING RESULTS")
-    save_path=result_folder / Path("visualize")
+    save_path=result_folder / Path(f"visualize_{test_folder_path.stem}")
     save_path.mkdir(exist_ok=True, parents=True)
     total_dataframe=test(
         model=model,
         test_loader=test_loader,
         chains=chains,
         save_path=save_path,
+        pdb_path=pdb_path,
     )
-    total_dataframe.to_csv(result_folder/Path("prediction.csv"))
+    total_dataframe.to_csv(result_folder/Path(f"prediction_{test_folder_path.stem}.csv"))
 
 
 if __name__ == "__main__":
