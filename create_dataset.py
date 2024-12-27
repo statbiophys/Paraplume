@@ -1,20 +1,26 @@
 import json
+import re
 from copy import deepcopy
 from pathlib import Path
 from typing import Dict
 
 import ablang2
+import esm
 import numpy as np
 import pandas as pd
 import torch
+import torch.nn.functional as F
 import typer
+from antiberty import AntiBERTyRunner
 from scipy.spatial import ConvexHull
 from tqdm import tqdm
 from transformers import BertModel, BertTokenizer, T5EncoderModel, T5Tokenizer
 from utils import build_dictionary, read_pdb_to_dataframe
 
 app = typer.Typer(add_completion=False)
+import warnings
 
+warnings.filterwarnings('ignore')
 
 def add_convex_hull_column(df: pd.DataFrame):
     """Add convex hull column to dataframe.
@@ -38,7 +44,6 @@ def add_convex_hull_column(df: pd.DataFrame):
         hull = ConvexHull(points)
         hull_indices = hull.vertices
         # Mark these points in the DataFrame with the current iteration k
-
         df_copy.loc[df_copy.index[hull_indices], "convex_hull"] = k
 
         # Remove the points on the current convex hull
@@ -55,7 +60,6 @@ def add_convex_hull_column(df: pd.DataFrame):
 
 def create_dictionary(
     pdb_dataframe: pd.DataFrame,
-    pdbs_only: bool = False,
     pdb_folder_path:Path=Path("/home/gathenes/all_structures/imgt_renumbered_expanded"),
 )-> Dict:
     """Create dictionary with indices mapping to heavy and light lists of matching imgt numbers, \
@@ -72,17 +76,9 @@ def create_dictionary(
             sequences and labels.
     """
 
-    if pdbs_only:
-        print("PDBS ONLY")
-        data = pd.read_csv(Path("/home/gathenes/all_structures/sabdab_summary_all.tsv"), sep="\t")
-        pdb_list = pdb_dataframe["pdb"].unique()
-        pdbs_and_chain = data.query("pdb in @pdb_list").dropna(
-            subset=["Hchain", "Lchain", "antigen_chain"]
-        )[["pdb", "Hchain", "Lchain", "antigen_chain"]]
-        pdbs_and_chain.reset_index(inplace=True)
-    else :
-        print("PDBS & CHAINS")
-        pdbs_and_chain=pdb_dataframe.reset_index()
+
+    print("PDBS & CHAINS")
+    pdbs_and_chain=pdb_dataframe.reset_index()
 
 
     print("BUILDING DICTIONARY")
@@ -90,29 +86,31 @@ def create_dictionary(
     return dataset_dict
 
 def create_embeddings(
-        dataset_dict:Dict,
-        save_path : Path,
-
+        dataset_dict: Dict,
+        save_path: Path = Path("/home/gathenes/paratope_model/test/test3/results"),
     ):
     """Create LLM amino acid embeddings.
 
     Args:
-        dataset_dict_path (Dict): Dictionary mapping index to heavy and light aa sequence.
+        dataset_dict (Dict): Dictionary mapping index to heavy and light aa sequence.
         save_path (Path): Path where to save embeddings.
     """
     print("CREATING EMBEDDINGS")
     sequence_heavy_emb = [dataset_dict[index]["H_id sequence"] for index in dataset_dict]
     sequence_light_emb = [dataset_dict[index]["L_id sequence"] for index in dataset_dict]
-    ########################################################
-    ######################## BERT ##########################
-    ########################################################
-    bert_tokeniser = BertTokenizer.from_pretrained("Exscientia/IgBert", do_lower_case=False)
-    bert_model = BertModel.from_pretrained("Exscientia/IgBert", add_pooling_layer=False)
     paired_sequences = []
     for seq_heavy, seq_light in zip(sequence_heavy_emb, sequence_light_emb):
         paired_sequences.append(
             " ".join(seq_heavy) + " [SEP] " + " ".join(seq_light)
         )
+
+    ########################################################
+    ######################## BERT ##########################
+    ########################################################
+    print("CREATING IG BERT EMBEDDINGS")
+
+    bert_tokeniser = BertTokenizer.from_pretrained("Exscientia/IgBert", do_lower_case=False)
+    bert_model = BertModel.from_pretrained("Exscientia/IgBert", add_pooling_layer=False)
     tokens = bert_tokeniser.batch_encode_plus(
         paired_sequences,
         add_special_tokens=True,
@@ -126,12 +124,13 @@ def create_embeddings(
             input_ids=tokens["input_ids"], attention_mask=tokens["attention_mask"]
         )
         bert_residue_embeddings = output.last_hidden_state
+
     ########################################################
     ###################### IGT5 ############################
     ########################################################
+    print("CREATING IG T5 EMBEDDINGS")
     igt5_tokeniser = T5Tokenizer.from_pretrained("Exscientia/IgT5", do_lower_case=False)
     igt5_model = T5EncoderModel.from_pretrained("Exscientia/IgT5")
-
     tokens = igt5_tokeniser.batch_encode_plus(
         paired_sequences,
         add_special_tokens=True,
@@ -145,19 +144,89 @@ def create_embeddings(
             input_ids=tokens["input_ids"], attention_mask=tokens["attention_mask"]
         )
         igt5_residue_embeddings = output.last_hidden_state
+
     ########################################################
     ##################### ABLANG ###########################
     ########################################################
+    print("CREATING ABLANG2 EMBEDDINGS")
     ablang = ablang2.pretrained()
-    all_seqs=[]
-    for seq_heavy, seq_light in zip(sequence_heavy_emb, sequence_light_emb):
-        all_seqs.append(
-            [seq_heavy,seq_light]
-        )
-    ablang_embeddings=ablang(all_seqs, mode='rescoding', stepwise_masking = False)
-    ablang_embeddings = [np.pad(each, ((0, 280-each.shape[0]),(0,0)), 'constant', constant_values=((0,0),(0,0))) for each in ablang_embeddings]
+    all_seqs = [[seq_heavy, seq_light] for seq_heavy, seq_light in zip(sequence_heavy_emb, sequence_light_emb)]
+    ablang_embeddings = ablang(all_seqs, mode='rescoding', stepwise_masking=False)
+    ablang_embeddings = [np.pad(each, ((0, 280 - each.shape[0]), (0, 0)), 'constant') for each in ablang_embeddings]
     ablang_embeddings = torch.Tensor(np.stack(ablang_embeddings))
-    residue_embeddings = torch.cat([bert_residue_embeddings, igt5_residue_embeddings, ablang_embeddings], dim=2)
+
+    ########################################################
+    ######################## ESM ###########################
+    ########################################################
+    print("CREATING ESM EMBEDDINGS")
+    esm_model, esm_alphabet = esm.pretrained.esm2_t33_650M_UR50D()
+    esm_batch_converter = esm_alphabet.get_batch_converter()
+    esm_model.eval()
+
+    data = []
+    for seq_heavy, seq_light in zip(sequence_heavy_emb, sequence_light_emb):
+        data.append(("ab", "".join(seq_heavy) + "".join(seq_light)))
+    _, _, esm_batch_tokens = esm_batch_converter(data)
+    with torch.no_grad():
+        esm_results = esm_model(esm_batch_tokens, repr_layers=[33], return_contacts=False)
+    esm_embeddings = esm_results["representations"][33]
+    pad_length = 280 - esm_embeddings.size(1)  # 280 is the desired length
+    padding = (0, 0, 0, pad_length)
+    esm_embeddings = F.pad(esm_embeddings, padding, mode='constant', value=0)
+
+    ########################################################
+    #################### ANTIBERTY #########################
+    ########################################################
+    print("CREATING ANTIBERTY EMBEDDINGS")
+    antiberty = AntiBERTyRunner()
+    antiberty_sequences = [
+        "".join(seq_heavy) + "".join(seq_light)
+        for seq_heavy, seq_light in zip(sequence_heavy_emb, sequence_light_emb)
+    ]
+    antiberty_embeddings = antiberty.embed(antiberty_sequences)
+    antiberty_embeddings = [np.pad(each.cpu().numpy(), ((0, 280 - each.shape[0]), (0, 0)), 'constant') for each in antiberty_embeddings]
+    antiberty_embeddings = torch.Tensor(np.stack(antiberty_embeddings))
+
+    ########################################################
+    ####################### ProtT5 #########################
+    ########################################################
+    print("CREATING PROT T5 EMBEDDINGS")
+
+    device = torch.device('cpu')
+
+    prot_t5_tokenizer = T5Tokenizer.from_pretrained("Rostlab/prot_t5_xl_half_uniref50-enc", do_lower_case=False)
+    prot_t5_model = T5EncoderModel.from_pretrained("Rostlab/prot_t5_xl_half_uniref50-enc").to(device)
+    prot_t5_model.to(torch.float32)
+
+    prot_t5_sequences = [
+        "".join(seq_heavy) + "".join(seq_light)
+        for seq_heavy, seq_light in zip(sequence_heavy_emb, sequence_light_emb)
+    ]
+    prot_t5_sequences = [" ".join(list(re.sub(r"[UZOB]", "X", seq))) for seq in prot_t5_sequences]
+    prot_t5_ids = prot_t5_tokenizer(prot_t5_sequences, add_special_tokens=True, padding="longest", return_tensors="pt")
+
+    input_ids = prot_t5_ids['input_ids'].to(device)
+    attention_mask = prot_t5_ids['attention_mask'].to(device)
+
+    with torch.no_grad():
+        prot_t5_output = prot_t5_model(input_ids=input_ids, attention_mask=attention_mask)
+
+    prot_t5_embeddings = prot_t5_output.last_hidden_state
+    pad_length = 280 - prot_t5_embeddings.size(1)
+    padding = (0, 0, 0, pad_length)
+    prot_t5_embeddings = F.pad(prot_t5_embeddings, padding, mode='constant', value=0)
+
+    ########################################################
+    ################# CONCATENATE EMBEDDINGS ###############
+    ########################################################
+    residue_embeddings = torch.cat([
+        bert_residue_embeddings,
+        igt5_residue_embeddings,
+        ablang_embeddings,
+        esm_embeddings,
+        antiberty_embeddings,
+        prot_t5_embeddings
+    ], dim=2)
     torch.save(residue_embeddings, save_path)
     return residue_embeddings
 
@@ -250,9 +319,6 @@ def main(
     result_folder: Path = typer.Option(
         Path("./result/"), "--result-folder", "-r", help="Where to save results"
     ),
-    pdbs_only:bool = typer.Option(
-        False, "--pdbs-only", help="Use only pdbs."
-    ),
     pdb_folder_path:Path=typer.Option(
         "/home/gathenes/all_structures/imgt_renumbered_expanded",
         "--pdb-folder-path", help="Pdb path for ground truth labeling."
@@ -262,7 +328,7 @@ def main(
     save_folder = result_folder/Path(stem)
     save_folder.mkdir(exist_ok=True,parents=True)
     pdb_dataframe = pd.read_csv(pdb_list_path)
-    dataset_dict = create_dictionary(pdb_dataframe, pdbs_only=pdbs_only, pdb_folder_path=pdb_folder_path)
+    dataset_dict = create_dictionary(pdb_dataframe, pdb_folder_path=pdb_folder_path)
     residue_embeddings = create_embeddings(dataset_dict=dataset_dict,save_path=save_folder / Path("embeddings.pt"))
     dataset_dict = create_convex_hull(pdb_list_path=pdb_list_path,pdb_folder_path=pdb_folder_path,dataset_dict=dataset_dict)
     dataset_dict = create_convex_hull_mean(pdb_list_path=pdb_list_path,pdb_folder_path=pdb_folder_path,dataset_dict=dataset_dict)
