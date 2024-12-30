@@ -223,14 +223,14 @@ def get_labels(
 
 
 def build_dictionary(
-    pdbs_and_chain: pd.DataFrame,
+    pdb_dataframe: pd.DataFrame,
     pdb_folder_path: Path = Path("/home/gathenes/all_structures/imgt_renumbered_expanded"),
 ) -> Dict[str, Dict[str, Any]]:
     """Transform dataframe with pdb codes and heavy and light chain names into Dictionary with \
         indices mapping to heavy and light lists of matching imgt numbers, sequences and labels.
 
     Args:
-        pdbs_and_chain (pd.DataFrame): Dataframe with pdb codes and heavy and light chain names.
+        pdb_dataframe (pd.DataFrame): Dataframe with pdb codes and heavy and light chain names.
         pdb_folder_path (Path): Folder path from which to construct ground truth.
 
     Returns:
@@ -238,12 +238,12 @@ def build_dictionary(
             matching imgt numbers, sequences and labels.
     """
     dataset_dict = rec_dd()
-    for index in tqdm(range(len(pdbs_and_chain))):
+    for index in tqdm(range(len(pdb_dataframe))):
         # get pdb codes and chain names
-        pdb_code = pdbs_and_chain.iloc[index]["pdb"]
-        h_id = pdbs_and_chain.iloc[index]["Hchain"]
-        l_id = pdbs_and_chain.iloc[index]["Lchain"]
-        antigen_id = pdbs_and_chain.iloc[index]["antigen_chain"]
+        pdb_code = pdb_dataframe.iloc[index]["pdb"]
+        h_id = pdb_dataframe.iloc[index]["Hchain"]
+        l_id = pdb_dataframe.iloc[index]["Lchain"]
+        antigen_id = pdb_dataframe.iloc[index]["antigen_chain"]
 
         # load dataframe
         df_pdb = read_pdb_to_dataframe(pdb_folder_path / Path(f"{pdb_code}.pdb"))
