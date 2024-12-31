@@ -15,10 +15,10 @@ import typer
 from antiberty import AntiBERTyRunner
 from transformers import BertModel, BertTokenizer, T5EncoderModel, T5Tokenizer
 
-from utils import build_dictionary
+from utils import build_dictionary, get_logger
 
 app = typer.Typer(add_completion=False)
-
+log = get_logger()
 warnings.filterwarnings("ignore")
 # pylint: disable=E1101
 
@@ -37,24 +37,24 @@ def create_embeddings(
     Returns:
         torch.Tensor: Tensor of embeddings.
     """
-    print("CREATING EMBEDDINGS")
+    log.info("CREATING EMBEDDINGS")
     sequence_heavy_emb = [dataset_dict[index]["H_id sequence"] for index in dataset_dict]
     sequence_light_emb = [dataset_dict[index]["L_id sequence"] for index in dataset_dict]
     paired_sequences = []
     for seq_heavy, seq_light in zip(sequence_heavy_emb, sequence_light_emb):
         paired_sequences.append(" ".join(seq_heavy) + " [SEP] " + " ".join(seq_light))
 
-    print("CREATING IG BERT EMBEDDINGS")
+    log.info("CREATING EMBEDDINGS", embedding_model="IgBert")
     bert_residue_embeddings = compute_igbert_embeddings(paired_sequences)
-    print("CREATING IG T5 EMBEDDINGS")
+    log.info("CREATING EMBEDDINGS", embedding_model="IgT5")
     igt5_residue_embeddings = compute_igt5_embeddings(paired_sequences)
-    print("CREATING ABLANG2 EMBEDDINGS")
+    log.info("CREATING EMBEDDINGS", embedding_model="Ablang2")
     ablang_embeddings = compute_ablang_embeddings(sequence_heavy_emb, sequence_light_emb)
-    print("CREATING ESM EMBEDDINGS")
+    log.info("CREATING EMBEDDINGS", embedding_model="ESM")
     esm_embeddings = compute_esm_embeddings(sequence_heavy_emb, sequence_light_emb)
-    print("CREATING ANTIBERTY EMBEDDINGS")
+    log.info("CREATING EMBEDDINGS", embedding_model="Antiberty")
     antiberty_embeddings = compute_antiberty_embeddings(sequence_heavy_emb, sequence_light_emb)
-    print("CREATING PROT T5 EMBEDDINGS")
+    log.info("CREATING EMBEDDINGS", embedding_model="Prot-T5")
     prot_t5_embeddings = compute_t5_embeddings(sequence_heavy_emb, sequence_light_emb)
 
     ########################################################

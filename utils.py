@@ -1,5 +1,6 @@
 """Contain some useful functions for the project."""
 
+import logging
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -7,9 +8,11 @@ from typing import Any, Dict, List, Optional, Tuple
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import structlog
 import torch
 import torch.nn.functional as F
 from biopandas.pdb import PandasPdb
+from sklearn.metrics import confusion_matrix
 from tqdm import tqdm
 
 
@@ -272,17 +275,17 @@ def build_dictionary(
         distances_heavy = [np.min(distance_dict_heavy[each]) for each in numbers_heavy]
         distances_light = [np.min(distance_dict_light[each]) for each in numbers_light]
 
-        dataset_dict[index]["h_id distances"] = distances_heavy
-        dataset_dict[index]["l_id distances"] = distances_light
+        dataset_dict[index]["H_id distances"] = distances_heavy
+        dataset_dict[index]["L_id distances"] = distances_light
 
-        dataset_dict[index]["h_id numbers"] = numbers_heavy
-        dataset_dict[index]["l_id numbers"] = numbers_light
+        dataset_dict[index]["H_id numbers"] = numbers_heavy
+        dataset_dict[index]["L_id numbers"] = numbers_light
 
-        dataset_dict[index]["h_id sequence"] = "".join(sequence_heavy)
-        dataset_dict[index]["l_id sequence"] = "".join(sequence_light)
+        dataset_dict[index]["H_id sequence"] = "".join(sequence_heavy)
+        dataset_dict[index]["L_id sequence"] = "".join(sequence_light)
 
-        dataset_dict[index]["h_id labels 4.5"] = labels_heavy_4_5
-        dataset_dict[index]["l_id labels 4.5"] = labels_light_4_5
+        dataset_dict[index]["H_id labels 4.5"] = labels_heavy_4_5
+        dataset_dict[index]["L_id labels 4.5"] = labels_light_4_5
 
         for alpha in [3, 3.5, 4, 5, 5.5, 6, 6.5, 7, 7.5]:
             labels_heavy, _, _ = get_labels(position_dict_heavy, distance_dict_heavy, alpha=alpha)
@@ -291,8 +294,8 @@ def build_dictionary(
                 distance_dict_light,
                 alpha=alpha,
             )
-            dataset_dict[index][f"h_id labels {alpha}"] = labels_heavy
-            dataset_dict[index][f"l_id labels {alpha}"] = labels_light
+            dataset_dict[index][f"H_id labels {alpha}"] = labels_heavy
+            dataset_dict[index][f"L_id labels {alpha}"] = labels_light
 
         # Save pdb code
         dataset_dict[index]["pdb_code"] = pdb_code
@@ -387,8 +390,8 @@ def get_other_labels(
     if alphas is None:
         return labels_list
     for alpha in alphas:
-        labels_heavy = dataset_dict[str(index)][f"h_id labels {alpha}"]
-        labels_light = dataset_dict[str(index)][f"l_id labels {alpha}"]
+        labels_heavy = dataset_dict[str(index)][f"H_id labels {alpha}"]
+        labels_light = dataset_dict[str(index)][f"L_id labels {alpha}"]
         labels_paired = labels_heavy + labels_light
         labels_padded = torch.FloatTensor(
             F.pad(
@@ -400,3 +403,36 @@ def get_other_labels(
         )
         labels_list.append(labels_padded)
     return labels_list
+
+
+def youdens_index(targets: np.ndarray, predictions: List[int]) -> float:
+    """Compute Youden index given two vectors.
+
+    Args:
+        targets (np.array): Targets
+        predictions (np.array): Predictions
+
+    Returns:
+        float: Youden index
+    """
+    tn, fp, fn, tp = confusion_matrix(targets, predictions).ravel()
+    sensitivity = tp / (tp + fn) if (tp + fn) > 0 else 0
+    specificity = tn / (tn + fp) if (tn + fp) > 0 else 0
+    return sensitivity + specificity - 1
+
+
+def get_logger():
+    """Return logger."""
+    renderer = structlog.dev.ConsoleRenderer(sort_keys=False)
+    structlog.configure(
+        wrapper_class=structlog.make_filtering_bound_logger(logging.INFO),
+        processors=[
+            structlog.stdlib.add_log_level,
+            structlog.stdlib.PositionalArgumentsFormatter(),
+            structlog.processors.TimeStamper(fmt="iso"),
+            structlog.processors.StackInfoRenderer(),
+            renderer,
+        ],
+    )
+    log = structlog.get_logger()
+    return log

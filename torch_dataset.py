@@ -76,7 +76,7 @@ class ParatopeDataset(Dataset):
 def create_dataloader(
     dataset_dict: Dict[str, Dict[str, Any]],
     embeddings: torch.Tensor,
-    alphas: Optional[List] = None,
+    alphas: Optional[List[str]] = None,
     mode: str = "train",
     batch_size: int = 16,
 ) -> torch.utils.data.dataloader.DataLoader:
