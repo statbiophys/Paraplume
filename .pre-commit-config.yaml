@@ -68,7 +68,6 @@ repos:
     rev: v0.982
     hooks:
       - id: mypy
-        exclude: /home/athenes/paratope_model/EGNN.py
         additional_dependencies: [
           types-setuptools==57.4.2,
           types-pytz,

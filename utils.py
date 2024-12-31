@@ -175,7 +175,7 @@ def get_binding_residues(
         df_antigen (pd.DataFrame): Dataframe of antigen chain with columns taken from pdb file.
 
     Returns:
-        position_dict, distance_dict(Tuple[Dict[str,str], Dict[str,List[float]]]): Dictionaries \
+        position_dict, distance_dict (Tuple[Dict[str,str], Dict[str,List[float]]]): Dictionaries \
             with imgt positions mapping to aa name, and list of distances to antigen.
     """
     antibody_coords = df_antibody[["x_coord", "y_coord", "z_coord"]].astype(float).to_numpy()
@@ -364,7 +364,7 @@ def read_pdb_to_dataframe(
 
     Returns:
         pd.DataFrame: A DataFrame containing the atomic coordinates and metadata, removed of it's
-        hydrogen atomswith one row per atom.
+        hydrogen atoms with one row per atom.
     """
     atomic_df = PandasPdb().read_pdb(pdb_path).df["ATOM"].query("element_symbol!='H'")
     atomic_df["IMGT"] = atomic_df["residue_number"].astype(str) + atomic_df["insertion"].astype(str)

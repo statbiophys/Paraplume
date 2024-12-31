@@ -1,9 +1,10 @@
 """Create dictionary of sequence/labels and corresponding LLM embeddings."""
+
 import json
 import re
 import warnings
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Callable, Dict, List
 
 import ablang2
 import esm
@@ -13,6 +14,7 @@ import torch
 import torch.nn.functional as F
 import typer
 from antiberty import AntiBERTyRunner
+from tqdm import tqdm
 from transformers import BertModel, BertTokenizer, T5EncoderModel, T5Tokenizer
 
 from utils import build_dictionary, get_logger
@@ -26,6 +28,7 @@ warnings.filterwarnings("ignore")
 def create_embeddings(
     dataset_dict: Dict[str, Dict[str, Any]],
     save_path: Path,
+    emb_proc_size: int = 100,
 ) -> torch.Tensor:
     """Create LLM amino acid embeddings.
 
@@ -40,22 +43,34 @@ def create_embeddings(
     log.info("CREATING EMBEDDINGS")
     sequence_heavy_emb = [dataset_dict[index]["H_id sequence"] for index in dataset_dict]
     sequence_light_emb = [dataset_dict[index]["L_id sequence"] for index in dataset_dict]
-    paired_sequences = []
-    for seq_heavy, seq_light in zip(sequence_heavy_emb, sequence_light_emb):
-        paired_sequences.append(" ".join(seq_heavy) + " [SEP] " + " ".join(seq_light))
 
     log.info("CREATING EMBEDDINGS", embedding_model="IgBert")
-    bert_residue_embeddings = compute_igbert_embeddings(paired_sequences)
+    bert_residue_embeddings = process_batch(
+        compute_igbert_embeddings, sequence_heavy_emb, sequence_light_emb, emb_proc_size
+    )
     log.info("CREATING EMBEDDINGS", embedding_model="IgT5")
-    igt5_residue_embeddings = compute_igt5_embeddings(paired_sequences)
+    igt5_residue_embeddings = process_batch(
+        compute_igt5_embeddings, sequence_heavy_emb, sequence_light_emb, emb_proc_size
+    )
     log.info("CREATING EMBEDDINGS", embedding_model="Ablang2")
-    ablang_embeddings = compute_ablang_embeddings(sequence_heavy_emb, sequence_light_emb)
+    ablang_embeddings = process_batch(
+        compute_ablang_embeddings, sequence_heavy_emb, sequence_light_emb, emb_proc_size
+    )
     log.info("CREATING EMBEDDINGS", embedding_model="ESM")
-    esm_embeddings = compute_esm_embeddings(sequence_heavy_emb, sequence_light_emb)
+    esm_embeddings = process_batch(
+        compute_esm_embeddings, sequence_heavy_emb, sequence_light_emb, emb_proc_size
+    )
     log.info("CREATING EMBEDDINGS", embedding_model="Antiberty")
-    antiberty_embeddings = compute_antiberty_embeddings(sequence_heavy_emb, sequence_light_emb)
+    antiberty_embeddings = process_batch(
+        compute_antiberty_embeddings,
+        sequence_heavy_emb,
+        sequence_light_emb,
+        emb_proc_size,
+    )
     log.info("CREATING EMBEDDINGS", embedding_model="Prot-T5")
-    prot_t5_embeddings = compute_t5_embeddings(sequence_heavy_emb, sequence_light_emb)
+    prot_t5_embeddings = process_batch(
+        compute_t5_embeddings, sequence_heavy_emb, sequence_light_emb, emb_proc_size
+    )
 
     ########################################################
     ################# CONCATENATE EMBEDDINGS ###############
@@ -73,6 +88,29 @@ def create_embeddings(
     )
     torch.save(residue_embeddings, save_path)
     return residue_embeddings
+
+
+def process_batch(
+    func: Callable, heavy_sequences: List, light_sequences: List, emb_proc_size: int
+) -> torch.Tensor:
+    """Create embedding for batch of size emb_proc_size.
+
+    Args:
+        func (Callable): Embedding function to use.
+        heavy_sequences (List): List of heavy sequences.
+        light_sequences (List): List of light sequences.
+        emb_proc_size (int): Size of the batch.
+
+    Returns:
+        torch.Tensor: Tensor of embedding.
+    """
+    batch_embeddings = []
+    for i in tqdm(range(0, len(heavy_sequences), emb_proc_size)):
+        heavy_batch = heavy_sequences[i : i + emb_proc_size]
+        light_batch = light_sequences[i : i + emb_proc_size]
+        batch_embeddings.append(func(heavy_batch, light_batch))
+    concat_embeddings = torch.cat(batch_embeddings, dim=0)
+    return concat_embeddings
 
 
 def compute_antiberty_embeddings(
@@ -155,7 +193,7 @@ def compute_ablang_embeddings(sequence_heavy_emb: List, sequence_light_emb: List
     return ablang_embeddings
 
 
-def compute_igt5_embeddings(paired_sequences: List) -> torch.Tensor:
+def compute_igt5_embeddings(sequence_heavy_emb: List, sequence_light_emb: List) -> torch.Tensor:
     """Compute embeddings.
 
     Args:
@@ -164,6 +202,9 @@ def compute_igt5_embeddings(paired_sequences: List) -> torch.Tensor:
     Returns:
         torch.Tensor: IgT5 embeddings.
     """
+    paired_sequences = []
+    for seq_heavy, seq_light in zip(sequence_heavy_emb, sequence_light_emb):
+        paired_sequences.append(" ".join(seq_heavy) + " [SEP] " + " ".join(seq_light))
     igt5_tokeniser = T5Tokenizer.from_pretrained("Exscientia/IgT5", do_lower_case=False)
     igt5_model = T5EncoderModel.from_pretrained("Exscientia/IgT5")
     tokens = igt5_tokeniser.batch_encode_plus(
@@ -180,7 +221,7 @@ def compute_igt5_embeddings(paired_sequences: List) -> torch.Tensor:
     return igt5_residue_embeddings
 
 
-def compute_igbert_embeddings(paired_sequences: List) -> torch.Tensor:
+def compute_igbert_embeddings(sequence_heavy_emb: List, sequence_light_emb: List) -> torch.Tensor:
     """Compute embeddings.
 
     Args:
@@ -189,6 +230,9 @@ def compute_igbert_embeddings(paired_sequences: List) -> torch.Tensor:
     Returns:
         torch.Tensor: Ig bert embeddings.
     """
+    paired_sequences = []
+    for seq_heavy, seq_light in zip(sequence_heavy_emb, sequence_light_emb):
+        paired_sequences.append(" ".join(seq_heavy) + " [SEP] " + " ".join(seq_light))
     bert_tokeniser = BertTokenizer.from_pretrained("Exscientia/IgBert", do_lower_case=False)
     bert_model = BertModel.from_pretrained("Exscientia/IgBert", add_pooling_layer=False)
     tokens = bert_tokeniser.batch_encode_plus(
@@ -231,7 +275,10 @@ def compute_t5_embeddings(sequence_heavy_emb: List, sequence_light_emb: List) ->
     ]
     prot_t5_sequences = [" ".join(list(re.sub(r"[UZOB]", "X", seq))) for seq in prot_t5_sequences]
     prot_t5_ids = prot_t5_tokenizer(
-        prot_t5_sequences, add_special_tokens=True, padding="longest", return_tensors="pt"
+        prot_t5_sequences,
+        add_special_tokens=True,
+        padding="longest",
+        return_tensors="pt",
     )
 
     input_ids = prot_t5_ids["input_ids"].to(device)
@@ -262,6 +309,12 @@ def main(
         "--pdb-folder-path",
         help="Pdb path for ground truth labeling.",
     ),
+    emb_proc_size: int = typer.Option(
+        100,
+        "--emb-proc-size",
+        help="We create embeddings batch by batch to avoid memory explosion. This is the batch\
+            size. Optimal value depends on your computer. Defaults to 100.",
+    ),
 ) -> None:
     """Create and save dictionary of sequences and labels in a json file, and the corresponding  \
         LLM embeddings in  pt file."""
@@ -270,7 +323,11 @@ def main(
     save_folder.mkdir(exist_ok=True, parents=True)
     pdb_dataframe = pd.read_csv(csv_file_path).reset_index()
     dataset_dict = build_dictionary(pdb_dataframe=pdb_dataframe, pdb_folder_path=pdb_folder_path)
-    _ = create_embeddings(dataset_dict=dataset_dict, save_path=save_folder / Path("embeddings.pt"))
+    _ = create_embeddings(
+        dataset_dict=dataset_dict,
+        save_path=save_folder / Path("embeddings.pt"),
+        emb_proc_size=emb_proc_size,
+    )
     with open(save_folder / Path("dict.json"), "w", encoding="utf-8") as f:
         json.dump(dataset_dict, f)
 

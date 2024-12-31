@@ -83,9 +83,12 @@ def create_dataloader(
     """Take dataset_dict and embeddings and return dataloader.
 
     Args:
-        dataset_dict (Dict[str, Dict[str, Any]]): _description_
-        embeddings (torch.Tensor): _description_
-        batch_size (int, optional): _description_. Defaults to 10.
+        dataset_dict (Dict[str, Dict[str, Any]]): Dictionary of sequences and labels.
+        embeddings (torch.Tensor): Correspondng embeddings.
+        batch_size (int, optional): Batch size. Defaults to 16.
+        mode (str): "Returns different dataloader depending on whether its "train", "valid"\
+            or "predict" mode.
+        alphas (List[str], optional): Alphas to use for multi objective training. Defaults to None.
 
     Returns:
         torch.utils.data.dataloader.DataLoader: Dataloader to use for training.
