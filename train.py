@@ -26,6 +26,47 @@ log = get_logger()
 # pylint: disable=too-many-statements
 # pylint: disable=too-many-positional-arguments
 # pylint: disable=too-many-branches
+# pylint: disable=duplicate-code
+
+
+def get_outputs(
+    embedding: torch.Tensor,
+    labels: torch.Tensor,
+    len_heavy: torch.Tensor,
+    len_light: torch.Tensor,
+    model: torch.nn.Sequential,
+    embedding_models_list: List,
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    """Get model outputs and labels.
+
+    Args:
+        embedding (torch.Tensor):
+        labels (torch.Tensor):
+        len_heavy (torch.Tensor): Lenghts of the heavy sequences for each element of the batch.
+        len_light (torch.Tensor): Lenghts of the light sequences for each element of the batch.
+        model (torch.nn.Sequential):
+        embedding_models_list (List): List of embedding models for which to get the\
+            pre-computed embeddings.
+
+    Returns:
+        Tuple[torch.Tensor,torch.Tensor]: Labels and outputs.
+    """
+    embedding_list = []
+    label_list = []
+    for i in range(len_heavy.shape[-1]):
+        heavy, light = len_heavy[i], len_light[i]
+        emb = get_embedding(
+            embedding=embedding[i],
+            embedding_models=embedding_models_list,
+            heavy=heavy,
+            light=light,
+        )
+        embedding_list.append(emb)
+        label_list.append(labels[i][: heavy + light])
+    embedding = torch.cat(embedding_list, dim=0)
+    labels = torch.cat(label_list, dim=0)
+    output = model(embedding)
+    return labels, output
 
 
 def get_metrics(
@@ -206,21 +247,14 @@ def train_multiobjective(
             model.eval()
             for embedding, labels, len_heavy, len_light in val_loader:
                 embedding, labels = embedding.to(device), labels.to(device)
-                embedding_list = []
-                label_list = []
-                for i in range(len_heavy.shape[-1]):
-                    heavy, light = len_heavy[i], len_light[i]
-                    emb = get_embedding(
-                        embedding=embedding[i],
-                        embedding_models=embedding_models_list,
-                        heavy=heavy,
-                        light=light,
-                    )
-                    embedding_list.append(emb)
-                    label_list.append(labels[i][: heavy + light])
-                embedding = torch.cat(embedding_list, dim=0)
-                labels = torch.cat(label_list, dim=0)
-                output = model(embedding)
+                labels, output = get_outputs(
+                    embedding=embedding,
+                    labels=labels,
+                    len_heavy=len_heavy,
+                    len_light=len_light,
+                    model=model,
+                    embedding_models_list=embedding_models_list,
+                )
                 output_sigmoid = torch.sigmoid(output).view(-1).detach().cpu().numpy()
                 output = output.view(-1)
                 loss = criterion(output, labels)
@@ -459,8 +493,8 @@ def main(
         "alphas": alphas,
         "patience": patience,
         "embedding_models": embedding_models,
-        "input_size": input_size,
-        "best_epoch": best_epoch,
+        "input_size": str(input_size),
+        "best_epoch": str(best_epoch),
         "best_ap": str(ap_list[best_epoch]),
         "best_auc": str(auc_list[best_epoch]),
         "threshold_youden": str(threshold_list[best_epoch]),
