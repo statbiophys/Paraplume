@@ -16,7 +16,6 @@ import typer
 from antiberty import AntiBERTyRunner
 from tqdm import tqdm
 from transformers import BertModel, BertTokenizer, T5EncoderModel, T5Tokenizer
-
 from utils import build_dictionary, get_logger
 
 app = typer.Typer(add_completion=False)
@@ -25,7 +24,7 @@ warnings.filterwarnings("ignore")
 # pylint: disable=E1101
 
 
-def create_embeddings(
+def create_embeddings_from_dict(
     dataset_dict: Dict[str, Dict[str, Any]],
     save_path: Path,
     emb_proc_size: int = 100,
@@ -36,6 +35,8 @@ def create_embeddings(
         dataset_dict (Dict[str, Dict[str, Any]]): Dictionary mapping index to heavy and light aa \
             sequence.
         save_path (Path): Path where to save embeddings.
+        emb_proc_size (int): Batch size to create embeddings without memory explosion.
+
 
     Returns:
         torch.Tensor: Tensor of embeddings.
@@ -44,6 +45,21 @@ def create_embeddings(
     sequence_heavy_emb = [dataset_dict[index]["H_id sequence"] for index in dataset_dict]
     sequence_light_emb = [dataset_dict[index]["L_id sequence"] for index in dataset_dict]
 
+    residue_embeddings = create_emebddings_from_seq(sequence_heavy_emb, sequence_light_emb,emb_proc_size)
+    torch.save(residue_embeddings, save_path)
+    return residue_embeddings
+
+def create_emebddings_from_seq(sequence_heavy_emb:List, sequence_light_emb:List,emb_proc_size:int):
+    """
+
+    Args:
+        sequence_heavy_emb (List): Heavy sequences
+        sequence_light_emb (List): Light sequences
+        emb_proc_size (int): Batch size to create embeddings without memory explosion.
+
+    Returns:
+        torch.Tensor: Embeddings
+    """
     log.info("CREATING EMBEDDINGS", embedding_model="IgBert")
     bert_residue_embeddings = process_batch(
         compute_igbert_embeddings, sequence_heavy_emb, sequence_light_emb, emb_proc_size
@@ -71,7 +87,6 @@ def create_embeddings(
     prot_t5_embeddings = process_batch(
         compute_t5_embeddings, sequence_heavy_emb, sequence_light_emb, emb_proc_size
     )
-
     ########################################################
     ################# CONCATENATE EMBEDDINGS ###############
     ########################################################
@@ -86,7 +101,7 @@ def create_embeddings(
         ],
         dim=2,
     )
-    torch.save(residue_embeddings, save_path)
+
     return residue_embeddings
 
 
@@ -113,6 +128,8 @@ def process_batch(
     return concat_embeddings
 
 
+
+
 def compute_antiberty_embeddings(
     sequence_heavy_emb: List, sequence_light_emb: List
 ) -> torch.Tensor:
@@ -125,7 +142,7 @@ def compute_antiberty_embeddings(
     Returns:
         torch.Tensor: Antiberty embeddings.
     """
-    antiberty = AntiBERTyRunner()
+    antiberty = AntiBERTyRunner()  # Move to GPU
     antiberty_sequences = [
         "".join(seq_heavy) + "".join(seq_light)
         for seq_heavy, seq_light in zip(sequence_heavy_emb, sequence_light_emb)
@@ -133,13 +150,13 @@ def compute_antiberty_embeddings(
     antiberty_embeddings: List[torch.Tensor] = antiberty.embed(antiberty_sequences)
     antiberty_embeddings = [
         np.pad(
-            each.cpu().numpy(),
-            ((0, 280 - each.shape[0]), (0, 0)),
+            each.cpu().numpy(),  # Move to CPU before padding
+            ((0, 285 - each.shape[0]), (0, 0)),
             "constant",
         )
         for each in antiberty_embeddings
     ]
-    antiberty_embeddings = torch.Tensor(np.stack(antiberty_embeddings))
+    antiberty_embeddings = torch.Tensor(np.stack(antiberty_embeddings))  # Convert to tensor
     return antiberty_embeddings
 
 
@@ -153,21 +170,28 @@ def compute_esm_embeddings(sequence_heavy_emb: List, sequence_light_emb: List) -
     Returns:
         torch.Tensor: ESM embeddings.
     """
+    device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+
     esm_model, esm_alphabet = esm.pretrained.esm2_t33_650M_UR50D()
+    esm_model = esm_model.to(device)  # Move model to GPU
     esm_batch_converter = esm_alphabet.get_batch_converter()
     esm_model.eval()
+    valid_characters = set(esm_alphabet.all_toks)
 
     data = []
     for seq_heavy, seq_light in zip(sequence_heavy_emb, sequence_light_emb):
-        data.append(("ab", "".join(seq_heavy) + "".join(seq_light)))
+        cleaned_seq_heavy = "".join([char if char in valid_characters else "X" for char in seq_heavy])
+        cleaned_seq_light = "".join([char if char in valid_characters else "X" for char in seq_light])
+        data.append(("ab", "".join(cleaned_seq_heavy) + "".join(cleaned_seq_light)))
     _, _, esm_batch_tokens = esm_batch_converter(data)
+    esm_batch_tokens = esm_batch_tokens.to(device)  # Move to GPU
     with torch.no_grad():
         esm_results = esm_model(esm_batch_tokens, repr_layers=[33], return_contacts=False)
     esm_embeddings = esm_results["representations"][33]
-    pad_length = 280 - esm_embeddings.size(1)  # 280 is the desired length
+    pad_length = 285 - esm_embeddings.size(1)  # 285 is the desired length
     padding = (0, 0, 0, pad_length)
     esm_embeddings = F.pad(esm_embeddings, padding, mode="constant", value=0)
-    return esm_embeddings
+    return esm_embeddings.cpu()  # Move back to CPU
 
 
 def compute_ablang_embeddings(sequence_heavy_emb: List, sequence_light_emb: List) -> torch.Tensor:
@@ -180,16 +204,16 @@ def compute_ablang_embeddings(sequence_heavy_emb: List, sequence_light_emb: List
     Returns:
         torch.Tensor: Ablang2 embeddings.
     """
-    ablang = ablang2.pretrained()
+    ablang = ablang2.pretrained()  # Move to GPU
     all_seqs = [
         [seq_heavy, seq_light]
         for seq_heavy, seq_light in zip(sequence_heavy_emb, sequence_light_emb)
     ]
     ablang_embeddings = ablang(all_seqs, mode="rescoding", stepwise_masking=False)
     ablang_embeddings = [
-        np.pad(each, ((0, 280 - each.shape[0]), (0, 0)), "constant") for each in ablang_embeddings
+        np.pad(each, ((0, 285 - each.shape[0]), (0, 0)), "constant") for each in ablang_embeddings
     ]
-    ablang_embeddings = torch.Tensor(np.stack(ablang_embeddings))
+    ablang_embeddings = torch.Tensor(np.stack(ablang_embeddings))  # Ensure it's on GPU
     return ablang_embeddings
 
 
@@ -202,23 +226,25 @@ def compute_igt5_embeddings(sequence_heavy_emb: List, sequence_light_emb: List) 
     Returns:
         torch.Tensor: IgT5 embeddings.
     """
+    device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
     paired_sequences = []
     for seq_heavy, seq_light in zip(sequence_heavy_emb, sequence_light_emb):
         paired_sequences.append(" ".join(seq_heavy) + " [SEP] " + " ".join(seq_light))
     igt5_tokeniser = T5Tokenizer.from_pretrained("Exscientia/IgT5", do_lower_case=False)
-    igt5_model = T5EncoderModel.from_pretrained("Exscientia/IgT5")
+    igt5_model = T5EncoderModel.from_pretrained("Exscientia/IgT5").to(device)  # Move to GPU
     tokens = igt5_tokeniser.batch_encode_plus(
         paired_sequences,
         add_special_tokens=True,
         padding="max_length",
-        max_length=280,
+        max_length=285,
         return_tensors="pt",
         return_special_tokens_mask=True,
     )
+    tokens = {key: value.to(device) for key, value in tokens.items()}  # Move tokens to GPU
     with torch.no_grad():
         output = igt5_model(input_ids=tokens["input_ids"], attention_mask=tokens["attention_mask"])
         igt5_residue_embeddings = output.last_hidden_state
-    return igt5_residue_embeddings
+    return igt5_residue_embeddings.cpu()  # Move back to CPU
 
 
 def compute_igbert_embeddings(sequence_heavy_emb: List, sequence_light_emb: List) -> torch.Tensor:
@@ -228,25 +254,27 @@ def compute_igbert_embeddings(sequence_heavy_emb: List, sequence_light_emb: List
         paired_sequences (List): Paired sequences of heavy and light chains.
 
     Returns:
-        torch.Tensor: Ig bert embeddings.
+        torch.Tensor: Ig BERT embeddings.
     """
+    device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
     paired_sequences = []
     for seq_heavy, seq_light in zip(sequence_heavy_emb, sequence_light_emb):
         paired_sequences.append(" ".join(seq_heavy) + " [SEP] " + " ".join(seq_light))
     bert_tokeniser = BertTokenizer.from_pretrained("Exscientia/IgBert", do_lower_case=False)
-    bert_model = BertModel.from_pretrained("Exscientia/IgBert", add_pooling_layer=False)
+    bert_model = BertModel.from_pretrained("Exscientia/IgBert", add_pooling_layer=False).to(device)  # Move to GPU
     tokens = bert_tokeniser.batch_encode_plus(
         paired_sequences,
         add_special_tokens=True,
         padding="max_length",
-        max_length=280,
+        max_length=285,
         return_tensors="pt",
         return_special_tokens_mask=True,
     )
+    tokens = {key: value.to(device) for key, value in tokens.items()}  # Move tokens to GPU
     with torch.no_grad():
         output = bert_model(input_ids=tokens["input_ids"], attention_mask=tokens["attention_mask"])
         bert_residue_embeddings = output.last_hidden_state
-    return bert_residue_embeddings
+    return bert_residue_embeddings.cpu()  # Move back to CPU
 
 
 def compute_t5_embeddings(sequence_heavy_emb: List, sequence_light_emb: List) -> torch.Tensor:
@@ -259,15 +287,11 @@ def compute_t5_embeddings(sequence_heavy_emb: List, sequence_light_emb: List) ->
     Returns:
         torch.Tensor: Prot-T5 embeddings.
     """
-    device = torch.device("cpu")
-
+    device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
     prot_t5_tokenizer = T5Tokenizer.from_pretrained(
         "Rostlab/prot_t5_xl_half_uniref50-enc", do_lower_case=False
     )
-    prot_t5_model = T5EncoderModel.from_pretrained("Rostlab/prot_t5_xl_half_uniref50-enc").to(
-        device
-    )
-    prot_t5_model.to(torch.float32)
+    prot_t5_model = T5EncoderModel.from_pretrained("Rostlab/prot_t5_xl_half_uniref50-enc").to(device)  # Move to GPU
 
     prot_t5_sequences = [
         "".join(seq_heavy) + "".join(seq_light)
@@ -280,19 +304,16 @@ def compute_t5_embeddings(sequence_heavy_emb: List, sequence_light_emb: List) ->
         padding="longest",
         return_tensors="pt",
     )
-
-    input_ids = prot_t5_ids["input_ids"].to(device)
-    attention_mask = prot_t5_ids["attention_mask"].to(device)
+    prot_t5_ids = {key: value.to(device) for key, value in prot_t5_ids.items()}  # Move tokens to GPU
 
     with torch.no_grad():
-        prot_t5_output = prot_t5_model(input_ids=input_ids, attention_mask=attention_mask)
+        prot_t5_output = prot_t5_model(input_ids=prot_t5_ids["input_ids"], attention_mask=prot_t5_ids["attention_mask"])
 
     prot_t5_embeddings = prot_t5_output.last_hidden_state
-    pad_length = 280 - prot_t5_embeddings.size(1)
+    pad_length = 285 - prot_t5_embeddings.size(1)
     padding = (0, 0, 0, pad_length)
     prot_t5_embeddings = F.pad(prot_t5_embeddings, padding, mode="constant", value=0)
-    return prot_t5_embeddings
-
+    return prot_t5_embeddings.cpu()  # Move back to CPU
 
 @app.command()
 def main(
@@ -323,7 +344,7 @@ def main(
     save_folder.mkdir(exist_ok=True, parents=True)
     pdb_dataframe = pd.read_csv(csv_file_path).reset_index()
     dataset_dict = build_dictionary(pdb_dataframe=pdb_dataframe, pdb_folder_path=pdb_folder_path)
-    _ = create_embeddings(
+    _ = create_embeddings_from_dict(
         dataset_dict=dataset_dict,
         save_path=save_folder / Path("embeddings.pt"),
         emb_proc_size=emb_proc_size,

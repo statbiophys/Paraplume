@@ -6,10 +6,10 @@ import pandas as pd
 import torch
 import typer
 from biopandas.pdb import PandasPdb
+from graph_torch_dataset import create_graph_dataloader
 from models import EGNN_Model
-from torch_dataset import create_graph_dataloader
 from tqdm import tqdm
-from utils import read_pdb_to_dataframe
+from utils import get_dim, read_pdb_to_dataframe
 
 warnings.filterwarnings("ignore")
 app = typer.Typer(add_completion=False)
@@ -20,6 +20,7 @@ def test(
     model,
     test_loader,
     chains: pd.DataFrame,
+    pdb_folder_path: str,
     save_path: Path,
     infer_edges:bool=False,
 ):
@@ -71,9 +72,7 @@ def test(
                     labels[len(imgt_heavy) + i].detach().cpu().numpy()
                 )
 
-            pdb_path = (
-                f"/home/gathenes/all_structures/imgt_renumbered_expanded/{pdb_code}.pdb"
-            )
+            pdb_path = f"{pdb_folder_path}/{pdb_code}.pdb"
             data_pdb = read_pdb_to_dataframe(pdb_path)
             light_chain, heavy_chain, antigen_chain = chains.query("pdb==@pdb_code")[
                 ["Lchain", "Hchain", "antigen_chain"]
@@ -147,12 +146,17 @@ def main(
         help="Path of test csv.",
         show_default=False,
     ),
-    features: str = typer.Option(
-        "one-hot", "--features", help="Features to use for the nodes."
-    ),
     infer_edges: bool = typer.Option(
         False, "--infer-edges", help="Infer edges instead of using sparse graph."
     ),
+    pdb_folder_path:Path=typer.Option(
+        "/home/gathenes/all_structures/imgt_renumbered_expanded",
+        "--pdb-folder-path",
+        help="Path of pdb folder.",
+        show_default=False,
+    ),
+    name:str=typer.Option(
+        "","--name", help="Extension to the files",)
 ) -> None:
 
     chains = pd.read_csv(chains_path)
@@ -160,7 +164,13 @@ def main(
     print(result_folder.as_posix())
     with open(result_folder / Path("graph_summary_dict.json"), encoding="utf-8") as f:
         summary_dict = json.load(f)
-    pdb_folder_path=summary_dict["pdb_folder_path"]
+
+
+    embedding_models = summary_dict["embedding_models"]
+    if embedding_models=='all':
+        embedding_models="ablang2,igbert,igT5,esm,antiberty,prot-t5"
+    embedding_models_list = embedding_models.split(",")
+
     with open(test_folder_path / Path("dict.json"), encoding="utf-8") as f:
         dict_test = json.load(f)
     test_embeddings = torch.load(
@@ -171,27 +181,27 @@ def main(
         embeddings=test_embeddings,
         pdb_folder_path=pdb_folder_path,
         csv=chains,
+        embedding_models=embedding_models_list,
     )
 
-    features = summary_dict["features"]
-    infer_edges = summary_dict["infer-edges"]
-    if features == "ablang":
-        feature_dim = 480
-    elif features == "T5":
-        feature_dim = 1024
-    elif features == "all-llm":
-        feature_dim = 2528
-    else:
-        feature_dim = 22
 
+    infer_edges = summary_dict["infer-edges"]
     if infer_edges:
         edge_dim = 0
     else:
         edge_dim = 1
+    if embedding_models == "one-hot":
+        feature_dim = 22
+    else:
+        feature_dim=get_dim(embedding_models_list)
+    num_graph_layers = summary_dict["num_graph_layers"]
+    linear_layers_dims = summary_dict["linear_layers_dims"]
+    graph_hidden_layer_output_dims = [feature_dim] * num_graph_layers
+    linear_hidden_layer_output_dims = [int(x) for x in linear_layers_dims.split(",")]
     model = EGNN_Model(
         num_feats=feature_dim,
-        graph_hidden_layer_output_dims=[feature_dim] * 6,
-        linear_hidden_layer_output_dims=[10] * 2,
+        graph_hidden_layer_output_dims=graph_hidden_layer_output_dims,
+        linear_hidden_layer_output_dims=linear_hidden_layer_output_dims,
         edge_dim=edge_dim,
     )
 
@@ -199,15 +209,16 @@ def main(
     model.load_state_dict(torch.load(model_path, weights_only=True,map_location=torch.device('cpu')))
     model.eval()
     print("RETRIEVING RESULTS")
-    save_path = result_folder / Path("visualize")
+    save_path = result_folder / Path(f"visualize_{name}")
     save_path.mkdir(exist_ok=True, parents=True)
     total_dataframe = test(
         model=model,
         test_loader=test_loader,
         chains=chains,
+        pdb_folder_path=pdb_folder_path,
         save_path=save_path,
     )
-    total_dataframe.to_csv(result_folder / Path("prediction.csv"))
+    total_dataframe.to_csv(result_folder / Path(f"prediction_{name}.csv"))
 
 
 if __name__ == "__main__":

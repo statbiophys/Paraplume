@@ -6,18 +6,20 @@ import pandas as pd
 import torch
 import torch.nn as nn
 import typer
+from graph_torch_dataset import create_graph_dataloader
 from models import EarlyStopping, EGNN_Model
 from sklearn.metrics import (
     average_precision_score,
     roc_auc_score,
 )
-from torch_dataset import create_graph_dataloader
 from tqdm import tqdm
-from utils import save_plot
+from utils import get_dim, save_plot
 
 app = typer.Typer(add_completion=False)
 
+import warnings
 
+warnings.filterwarnings("ignore")
 
 def train(
     model,
@@ -28,21 +30,30 @@ def train(
     model_save_path=Path("./checkpoint.pt"),
     criterion=nn.BCELoss(),
     infer_edges=False,
+    batch_size=16,
+    patience:int=100,
+    mask_prob=0,
 ):
     # Training loop
-    device = torch.device("cpu")
+    device = torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
+    model=model.to(device)
     train_loss_list = []
     val_loss_list = []
     auc_list = []
     ap_list = []
 
-    early_stopping = EarlyStopping(patience=100, path=model_save_path, best_score=0)
+    early_stopping = EarlyStopping(patience=patience, path=model_save_path, best_score=0)
     for epoch in range(n_epochs):
         model.train()
         train_loss = 0
         for j, ((feats, coors, edges), labels, _,_,_) in enumerate(tqdm(train_loader)):
-
-            if (j + 1) % 16 == 0 or (j + 1) == len(train_loader):
+            drop_mask = torch.rand(feats.size(), device=feats.device) >= mask_prob
+            feats=feats * drop_mask.float()
+            feats=feats.to(device)
+            coors=coors.to(device)
+            edges=edges.to(device)
+            labels=labels.to(device)
+            if (j + 1) % batch_size == 0 or (j + 1) == len(train_loader):
                 optimizer.zero_grad()
             if infer_edges:
                 pred = pred = model(feats, coors, edges=None)
@@ -51,9 +62,9 @@ def train(
             labels = labels.squeeze()
             pred = pred.squeeze()
             loss = criterion(pred, labels)
-            loss = loss / 16
+            loss = loss / batch_size
             loss.backward()
-            if (j + 1) % 16 == 0 or (j + 1) == len(train_loader):
+            if (j + 1) % batch_size == 0 or (j + 1) == len(train_loader):
                 optimizer.step()
             train_loss += loss.item()
         train_loss /= len(train_loader)
@@ -66,6 +77,10 @@ def train(
         with torch.no_grad():
             model.eval()
             for (feats, coors, edges), labels, _,_,_ in tqdm(val_loader):
+                feats=feats.to(device)
+                coors=coors.to(device)
+                edges=edges.to(device)
+                labels=labels.to(device)
                 if infer_edges:
                     pred = model(feats, coors, edges=None)
                 else:
@@ -115,6 +130,16 @@ def main(
         help="Path of valfolder.",
         show_default=False,
     ),
+    train_csv_path:Path=typer.Argument(
+        ...,
+        help="Path of train csv.",
+        show_default=False,
+    ),
+    val_csv_path:Path=typer.Argument(
+        ...,
+        help="Path of val csv.",
+        show_default=False,
+    ),
     learning_rate: float = typer.Option(
         0.001, "--lr", help="Learning rate to use for training."
     ),
@@ -125,10 +150,10 @@ def main(
         Path("./result/"), "--result_folder", "-r", help="Where to save results."
     ),
     positive_weight: float = typer.Option(
-        1, "--pos-weight", help="Weight to give to positive labels."
+        3, "--pos-weight", help="Weight to give to positive labels."
     ),
     batch_size: int = typer.Option(
-        1, "--batch-size", "-bs", help="Batch size. Defaults to 10."
+        16, "--batch-size", "-bs", help="Batch size. Defaults to 10."
     ),
     override: bool = typer.Option(
         False, "--override", help="Override results. Defaults to False"
@@ -147,8 +172,11 @@ def main(
         "--pdb-folder-path-train",
         help="Pdb folder path.",
     ),
-    features: str = typer.Option(
-        "one-hot", "--features", help="Features to use for the nodes."
+    embedding_models:str=typer.Option(
+        "one-hot", "--emb-models", help="Embedding models to use, separated by commas. \
+            Models should be in 'ablang2','igbert','igT5','esm','antiberty',prot-t5','all'. \
+            All means all of the preceding models. One-hot means the traditional one hot encoding" \
+            "of amino acid. Default to one-hot"
     ),
     infer_edges: bool = typer.Option(
         False, "--infer-edges", help="Infer edges instead of using sparse graph."
@@ -156,10 +184,32 @@ def main(
     dropout:float=typer.Option(
         0,"--dropout", help="Dropout for EGNN. Defaults to 0."
     ),
+    num_graph_layers:int=typer.Option(
+        6, "--num-graph-layers", help="Graph layers dimensions for EGNN. \
+        Defaults to 6."),
+    linear_layers_dims:str=typer.Option(
+        "10,10", "--linear-layers-dims", help="Linear layers dimensions for EGNN. \
+            Defaults to 10,10."),
+    mask_prob:float=typer.Option(
+        0, "--mask-prob", help="Probability with which to mask each embedding coefficient. \
+            Defaults to 0"
+    ),
+    patience:int=typer.Option(
+        100, "--patience", help="Patience to use for early stopping. 0 means no early stopping. \
+        Defaults to 0."
+    ),
+    l2_pen:float=typer.Option(
+        0, "--l2-pen", help="L2 penalty to use for the model weights."
+    ),
+    graph_distance:float=typer.Option(
+        10, "--graph-distance", help="Distance to use to compute graph"
+    ),
+    region:str=typer.Option(
+        "cdrs","--region", help="Region to use for training. Defaults to cdrs.")
 ) -> None:
     if seed>0:
         torch.manual_seed(seed)
-    if (result_folder / Path("summary_dict.json")).exists() and not override:
+    if (result_folder / Path("graph_summary_dict.json")).exists() and not override:
         print("Not overriding results.")
         return
     elif (result_folder / Path("summary_dict.json")).exists():
@@ -176,11 +226,22 @@ def main(
         "override": override,
         "alpha": alpha,
         "seed": seed,
-        "features": features,
+        "embedding_models": embedding_models,
         "infer-edges": infer_edges,
         "pdb_folder_path_val": str(pdb_folder_path_val),
+        "pdb_folder_path_train": str(pdb_folder_path_train),
         "dropout":dropout,
+        "patience":patience,
+        "l2_pen": l2_pen,
+        "num_graph_layers": num_graph_layers,
+        "linear_layers_dims": linear_layers_dims,
+        "mask_prob": mask_prob,
+        "graph_distance": graph_distance,
+        "region": region,
     }
+    if embedding_models=='all':
+        embedding_models="ablang2,igbert,igT5,esm,antiberty,prot-t5"
+    embedding_models_list = embedding_models.split(",")
     if seed > 0:
         torch.manual_seed(seed)
     with open(train_folder_path / Path("dict.json"), encoding="utf-8") as f:
@@ -188,64 +249,60 @@ def main(
     train_embeddings = torch.load(
         train_folder_path / Path("embeddings.pt"), weights_only=True
     )
-    train_csv = pd.read_csv(
-        "/home/gathenes/paragraph_benchmark/expanded_dataset/train_set.csv"
-    )
 
     with open(val_folder_path / Path("dict.json"), encoding="utf-8") as f:
         dict_val = json.load(f)
     val_embeddings = torch.load(
         val_folder_path / Path("embeddings.pt"), weights_only=True
     )
-    val_csv = pd.read_csv(
-        "/home/gathenes/paragraph_benchmark/expanded_dataset/val_set.csv"
-    )
 
-    if features == "ablang":
-        feature_dim = 480
-    elif features == "T5":
-        feature_dim = 1024
-    elif features == "all-llm":
-        feature_dim = 2528
-    else:
+    if embedding_models == "one-hot":
         feature_dim = 22
+    else:
+        feature_dim=get_dim(embedding_models_list)
 
     if infer_edges:
         edge_dim = 0
     else:
         edge_dim = 1
 
+    train_csv = pd.read_csv(train_csv_path)
+    val_csv = pd.read_csv(val_csv_path)
     train_loader = create_graph_dataloader(
         csv=train_csv,
         dataset_dict=dict_train,
         embeddings=train_embeddings,
-        batch_size=batch_size,
         shuffle=True,
         pdb_folder_path=pdb_folder_path_train,
-        features=features,
+        embedding_models=embedding_models_list,
+        graph_distance=graph_distance,
+        region=region,
     )
     val_loader = create_graph_dataloader(
         csv=val_csv,
         dataset_dict=dict_val,
         embeddings=val_embeddings,
-        batch_size=batch_size,
         pdb_folder_path=pdb_folder_path_val,
-        features=features,
+        embedding_models=embedding_models_list,
+        graph_distance=graph_distance,
+        region=region,
     )
     pos_weight = torch.tensor(
-        [positive_weight], device=torch.device("cpu")
+        [positive_weight], device=torch.device('cuda:1' if torch.cuda.is_available() else 'cpu')
     )  # All weights are equal to 1
     criterion = torch.nn.BCEWithLogitsLoss(pos_weight=pos_weight)
 
+    graph_hidden_layer_output_dims = [feature_dim] * num_graph_layers
+    linear_hidden_layer_output_dims = [int(x) for x in linear_layers_dims.split(",")]
     model = EGNN_Model(
         num_feats=feature_dim,
-        graph_hidden_layer_output_dims=[feature_dim] * 6,
-        linear_hidden_layer_output_dims=[10] * 2,
+        graph_hidden_layer_output_dims=graph_hidden_layer_output_dims,
+        linear_hidden_layer_output_dims=linear_hidden_layer_output_dims,
         edge_dim=edge_dim,
         dropout=dropout,
     )
 
-    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=l2_pen)
     model_save_path = result_folder / Path("graph_checkpoint.pt")
     train_loss_list, val_loss_list, auc_list, ap_list = train(
         model=model,
@@ -256,6 +313,9 @@ def main(
         criterion=criterion,
         model_save_path=model_save_path,
         infer_edges=infer_edges,
+        batch_size=batch_size,
+        patience=patience,
+        mask_prob=mask_prob,
     )
     save_plot_path = result_folder / Path("summary_plot.png")
     save_plot(

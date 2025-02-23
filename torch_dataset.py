@@ -5,7 +5,6 @@ from typing import Any, Dict, List, Optional, Tuple
 import torch
 import torch.nn.functional as F
 from torch.utils.data import Dataset
-
 from utils import get_other_labels
 
 
@@ -41,7 +40,7 @@ class ParatopeDataset(Dataset):
         main_labels = torch.FloatTensor(
             F.pad(
                 torch.FloatTensor(main_labels_paired),
-                (0, 280 - len(torch.FloatTensor(main_labels_paired))),
+                (0, 285 - len(torch.FloatTensor(main_labels_paired))),
                 "constant",
                 0,
             )

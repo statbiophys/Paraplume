@@ -7,11 +7,15 @@ from typing import List, Tuple
 import numpy as np
 import torch
 import typer
-from sklearn.metrics import average_precision_score, f1_score, matthews_corrcoef, roc_auc_score
+from sklearn.metrics import (
+    average_precision_score,
+    f1_score,
+    matthews_corrcoef,
+    roc_auc_score,
+)
 from torch.nn import Dropout, Linear, Module, ReLU, Sequential, Sigmoid
-from tqdm import tqdm
-
 from torch_dataset import create_dataloader
+from tqdm import tqdm
 from train import get_outputs
 from utils import get_logger
 
@@ -109,6 +113,11 @@ def main(
         help="Path of testloader.",
         show_default=False,
     ),
+    name:str=typer.Option(
+        "",
+        "--name",
+        help="Add name to end of file."
+    ),
 ) -> None:
     """Save metrics in dictionary for test set."""
     model_path = result_folder / Path("checkpoint.pt")
@@ -180,7 +189,7 @@ def main(
     args_dict["mcc_best_val"] = str(best_val_mcc)
     args_dict["f1_best_val"] = str(best_val_f1)
 
-    result_dict_path = result_folder / Path(f"{test_folder_path.stem}_results_dict.json")
+    result_dict_path = result_folder / Path(f"{test_folder_path.stem}_results_dict{name}.json")
     log.info("Saving results", path=result_dict_path.as_posix())
     with open(result_dict_path, "w", encoding="utf-8") as json_file:
         json.dump(args_dict, json_file, indent=4)

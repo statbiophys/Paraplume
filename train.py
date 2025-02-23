@@ -8,15 +8,19 @@ from typing import List, Tuple
 import numpy as np
 import torch
 import typer
-from sklearn.metrics import average_precision_score, f1_score, matthews_corrcoef, roc_auc_score
+from models import EarlyStopping
+from sklearn.metrics import (
+    average_precision_score,
+    f1_score,
+    matthews_corrcoef,
+    roc_auc_score,
+)
 from torch import nn
 from torch.nn import Dropout, Linear, Module, ReLU, Sequential
+from torch_dataset import create_dataloader
 from torchjd import mtl_backward
 from torchjd.aggregation import UPGrad
 from tqdm import tqdm
-
-from models import EarlyStopping
-from torch_dataset import create_dataloader
 from utils import get_dim, get_embedding, get_logger, save_plot, youdens_index
 
 app = typer.Typer(add_completion=False)
@@ -125,6 +129,7 @@ def train_multiobjective(
     n_epochs: int = 3,
     mask_prob: float = 0,
     patience: int = 0,
+    gpu:int=1,
 ):
     """Train model given parameters.
 
@@ -147,7 +152,7 @@ def train_multiobjective(
     Returns:
         _type_: _description_
     """
-    device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+    device = torch.device(f"cuda:{gpu}" if torch.cuda.is_available() else "cpu")
     aggregator = UPGrad().to(device)
 
     train_loss_list = []
@@ -199,9 +204,8 @@ def train_multiobjective(
                 for l, each in enumerate(other_labels):
                     other_label = each[i][: heavy + light]
                     other_labels_list[l].append(other_label)
-                if random.random() < mask_prob:  # nosec
-                    drop_mask = torch.rand(emb.size(), device=emb.device) >= mask_prob
-                    emb = emb * drop_mask.float()
+                drop_mask = torch.rand(emb.size(), device=emb.device) >= mask_prob
+                emb = emb * drop_mask.float()
                 embedding_list.append(emb)
             embedding = torch.cat(embedding_list, dim=0)
             main_labels = torch.cat(main_labels_list, dim=0)
@@ -359,6 +363,11 @@ def main(
             Models should be in 'ablang2','igbert','igT5','esm','antiberty',prot-t5','all'. \
             Default to 'all'.",
     ),
+    gpu:int=typer.Option(
+        1,
+        "--gpu",
+        help="Which GPU to use."
+    )
 ) -> None:
     """Train the model given provided parameters and data."""
     if (result_folder / Path("summary_dict.json")).exists() and not override:
@@ -429,7 +438,7 @@ def main(
     criterion = nn.BCEWithLogitsLoss(
         pos_weight=torch.tensor(
             [positive_weight],
-            device=torch.device("cuda:1" if torch.cuda.is_available() else "cpu"),
+            device=torch.device(f"cuda:{gpu}" if torch.cuda.is_available() else "cpu"),
         )
     )
     log.info("INITIALIZE OPTIMIZER", learning_rate=learning_rate, weight_decay=l2_pen)
@@ -459,6 +468,7 @@ def main(
         mask_prob=mask_prob,
         patience=patience,
         embedding_models_list=embedding_models_list,
+        gpu=gpu,
     )
     log.info(
         "SAVE TRAIN AND VALID METRIC PLOTS",

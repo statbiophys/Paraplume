@@ -249,13 +249,16 @@ def build_dictionary(
         antigen_id = pdb_dataframe.iloc[index]["antigen_chain"]
 
         # load dataframe
+        if not (pdb_folder_path / Path(f"{pdb_code}.pdb")).exists():
+            raise ValueError(f"{pdb_code} not in {pdb_folder_path.as_posix()}")
         df_pdb = read_pdb_to_dataframe(pdb_folder_path / Path(f"{pdb_code}.pdb"))
-
         # Get each dataframe for each chain type
         df_chain_heavy = df_pdb.query("chain_id == @h_id and residue_number<129")
         df_chain_light = df_pdb.query("chain_id == @l_id and residue_number<128")
         antigen_ids = antigen_id.split(";")
         df_chain_antigen = df_pdb.query("chain_id.isin(@antigen_ids)")
+        if len(df_chain_antigen)== 0:
+            raise ValueError(f"Empty antigen, please check pdb {pdb_code}")
 
         # Get binding residues
         position_dict_heavy, distance_dict_heavy = get_binding_residues(
@@ -396,7 +399,7 @@ def get_other_labels(
         labels_padded = torch.FloatTensor(
             F.pad(
                 torch.FloatTensor(labels_paired),
-                (0, 280 - len(torch.FloatTensor(labels_paired))),
+                (0, 285 - len(torch.FloatTensor(labels_paired))),
                 "constant",
                 0,
             )
