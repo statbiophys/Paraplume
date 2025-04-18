@@ -306,6 +306,65 @@ def build_dictionary(
     return dataset_dict
 
 
+def build_dictionary_single_chain(
+    pdb_dataframe: pd.DataFrame,
+    pdb_folder_path: Path = Path("/home/gathenes/all_structures/imgt_renumbered_expanded"),
+    chain:str="heavy",
+) -> Dict[str, Dict[str, Any]]:
+    """Transform dataframe with pdb codes and heavy and light chain names into Dictionary with \
+        indices mapping to heavy and light lists of matching imgt numbers, sequences and labels.
+
+    Args:
+        pdb_dataframe (pd.DataFrame): Dataframe with pdb codes and heavy and light chain names.
+        pdb_folder_path (Path): Folder path from which to construct ground truth.
+        chain(str): Chain to use
+
+    Returns:
+        Dict[str, Dict[str, Any]]: Dictionary with indices mapping to heavy and light lists of \
+            matching imgt numbers, sequences and labels.
+    """
+    dataset_dict = rec_dd()
+    for index in tqdm(range(len(pdb_dataframe))):
+        # get pdb codes and chain names
+        pdb_code = pdb_dataframe.iloc[index]["pdb"]
+        if not (pdb_folder_path / Path(f"{pdb_code}.pdb")).exists():
+            raise ValueError(f"{pdb_code} not in {pdb_folder_path.as_posix()}")
+
+        df_pdb = read_pdb_to_dataframe(pdb_folder_path / Path(f"{pdb_code}.pdb"))
+
+        if chain=="heavy":
+            id = pdb_dataframe.iloc[index]["Hchain"]
+            df_chain = df_pdb.query("chain_id == @id and residue_number<129")
+        else :
+            id = pdb_dataframe.iloc[index]["Lchain"]
+            df_chain = df_pdb.query("chain_id == @id and residue_number<128")
+        antigen_id = pdb_dataframe.iloc[index]["antigen_chain"]
+        antigen_ids = antigen_id.split(";")
+        df_chain_antigen = df_pdb.query("chain_id.isin(@antigen_ids)")
+        if len(df_chain_antigen)== 0:
+            raise ValueError(f"Empty antigen, please check pdb {pdb_code}")
+
+        # Get binding residues
+        position_dict, distance_dict = get_binding_residues(
+            df_chain, df_chain_antigen
+        )
+        labels_4_5, sequence, numbers = get_labels(
+            position_dict, distance_dict, alpha=4.5
+        )
+
+        distances = [np.min(distance_dict[each]) for each in numbers]
+        dataset_dict[index]["distances"] = distances
+        dataset_dict[index]["numbers"] = numbers
+        dataset_dict[index]["sequence"] = "".join(sequence)
+        dataset_dict[index]["labels 4.5"] = labels_4_5
+        for alpha in [3, 3.5, 4, 5, 5.5, 6, 6.5, 7, 7.5]:
+            labels, _, _ = get_labels(position_dict, distance_dict, alpha=alpha)
+            dataset_dict[index][f"labels {alpha}"] = labels
+
+        # Save pdb code
+        dataset_dict[index]["pdb_code"] = pdb_code
+    return dataset_dict
+
 def save_plot(
     train_loss_list: List,
     val_loss_list: List,
@@ -400,6 +459,37 @@ def get_other_labels(
             F.pad(
                 torch.FloatTensor(labels_paired),
                 (0, 285 - len(torch.FloatTensor(labels_paired))),
+                "constant",
+                0,
+            )
+        )
+        labels_list.append(labels_padded)
+    return labels_list
+
+def get_other_labels_single_chain(
+    dataset_dict: Dict[str, Dict[str, Any]], index: int, alphas: Optional[List] = None
+) -> List[torch.Tensor]:
+    """Return list of tensors of padded labels for different alphas.
+
+    Args:
+        dataset_dict (Dict[str, Dict[str, Any]]): Dictionary mapping indices to positions, \
+            imgt numbers and labels.
+        index (int): Index of dictionary.
+        alphas (Optional[List]): List of alphas to use for multi objective \
+            optimization. Defaults to None.
+
+    Returns:
+        List[torch.Tensor]: List of padded labels.
+    """
+    labels_list: List[torch.Tensor] = []
+    if alphas is None:
+        return labels_list
+    for alpha in alphas:
+        labels = dataset_dict[str(index)][f"labels {alpha}"]
+        labels_padded = torch.FloatTensor(
+            F.pad(
+                torch.FloatTensor(labels),
+                (0, 285 - len(torch.FloatTensor(labels))),
                 "constant",
                 0,
             )

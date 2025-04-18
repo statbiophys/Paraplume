@@ -7,15 +7,11 @@ from typing import List, Tuple
 import numpy as np
 import torch
 import typer
-from sklearn.metrics import (
-    average_precision_score,
-    f1_score,
-    matthews_corrcoef,
-    roc_auc_score,
-)
+from sklearn.metrics import average_precision_score, f1_score, matthews_corrcoef, roc_auc_score
 from torch.nn import Dropout, Linear, Module, ReLU, Sequential, Sigmoid
-from torch_dataset import create_dataloader
 from tqdm import tqdm
+
+from torch_dataset import create_dataloader
 from train import get_outputs
 from utils import get_logger
 

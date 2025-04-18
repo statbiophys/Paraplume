@@ -6,13 +6,11 @@ import pandas as pd
 import torch
 import torch.nn as nn
 import typer
+from sklearn.metrics import average_precision_score, roc_auc_score
+from tqdm import tqdm
+
 from graph_torch_dataset import create_graph_dataloader
 from models import EarlyStopping, EGNN_Model
-from sklearn.metrics import (
-    average_precision_score,
-    roc_auc_score,
-)
-from tqdm import tqdm
 from utils import get_dim, save_plot
 
 app = typer.Typer(add_completion=False)

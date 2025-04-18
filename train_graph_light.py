@@ -7,13 +7,14 @@ import pandas as pd
 import torch
 import torch.nn as nn
 import typer
-from graph_torch_dataset import create_graph_dataloader
 from lightning.fabric import Fabric
-from models import EGNN_Model
 from pytorch_lightning import LightningDataModule, LightningModule, Trainer
 from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint
 from pytorch_lightning.loggers import CSVLogger
 from sklearn.metrics import average_precision_score, roc_auc_score
+
+from graph_torch_dataset import create_graph_dataloader
+from models import EGNN_Model
 from utils import get_dim, save_plot
 
 # Typer for CLI interface

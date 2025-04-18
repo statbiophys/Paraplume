@@ -30,12 +30,22 @@ def predict_from_df(
         help="Path of the folder where the model is saved.",
         show_default=False,
     ),
+    name:str=typer.Option(
+        "",
+        "--name",
+        help="Extension to add to the file.",
+    ),
     save_embeddings:bool=typer.Option(
         False,
         "--save-embeddings",
         help="Whether to save the embeddings or not.\
             Not advised for large files."
-        )) -> None:
+        ),
+    gpu:int=typer.Option(
+        1,
+        "--gpu",
+        help="Which GPU to use."
+    )) -> None:
     """Predict paratope from sequence."""
     summary_dict_path = result_folder / Path("summary_dict.json")
     log.info("Loading training summary dictionary.", path=summary_dict_path.as_posix())
@@ -60,7 +70,7 @@ def predict_from_df(
     log.info("Loading model.", path=model_path.as_posix())
     model.load_state_dict(torch.load(model_path, weights_only=True))
     model.eval()
-    device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+    device = torch.device(f"cuda:{gpu}" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
 
     embedding_models = summary_dict["embedding_models"]
@@ -105,7 +115,7 @@ def predict_from_df(
     df["embeddings_classical"]=embeddings_classical
     df["model_prediction_heavy"]=heavy_outputs
     df["model_prediction_light"]=light_outputs
-    result_path = file_path.parents[0] / Path("paratope_"+file_path.name)
+    result_path = file_path.parents[0] / Path(f"{name}paratope_"+file_path.name)
     df.to_csv(result_path)
     return output
 

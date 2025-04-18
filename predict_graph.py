@@ -6,9 +6,10 @@ import pandas as pd
 import torch
 import typer
 from biopandas.pdb import PandasPdb
+from tqdm import tqdm
+
 from graph_torch_dataset import create_graph_dataloader
 from models import EGNN_Model
-from tqdm import tqdm
 from utils import get_dim, read_pdb_to_dataframe
 
 warnings.filterwarnings("ignore")

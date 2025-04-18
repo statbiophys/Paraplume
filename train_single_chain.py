@@ -367,6 +367,11 @@ def main(
         1,
         "--gpu",
         help="Which GPU to use."
+    ),
+    chain:str=typer.Option(
+        "heavy",
+        "--chain",
+        help="Chain to use for single chain model. Defaults to heavy.",
     )
 ) -> None:
     """Train the model given provided parameters and data."""
@@ -390,12 +395,12 @@ def main(
     dims_list = [int(each) for each in dims.split(",")]
     dropouts_list = [float(each) for each in dropouts.split(",")]
     log.info("LOADING DICTIONARY AND EMBEDDINGS")
-    with open(train_folder_path / Path("dict.json"), encoding="utf-8") as f:
+    with open(train_folder_path / Path(f"dict_{chain}.json"), encoding="utf-8") as f:
         dict_train = json.load(f)
-    train_embeddings = torch.load(train_folder_path / Path("embeddings.pt"), weights_only=True)
-    with open(val_folder_path / Path("dict.json"), encoding="utf-8") as f:
+    train_embeddings = torch.load(train_folder_path / Path(f"embeddings_{chain}.pt"), weights_only=True)
+    with open(val_folder_path / Path(f"dict_{chain}.json"), encoding="utf-8") as f:
         dict_val = json.load(f)
-    val_embeddings = torch.load(val_folder_path / Path("embeddings.pt"), weights_only=True)
+    val_embeddings = torch.load(val_folder_path / Path(f"embeddings_{chain}.pt"), weights_only=True)
     log.info("CREATING DATALOADER")
     train_loader = create_dataloader(
         dataset_dict=dict_train,
@@ -403,12 +408,14 @@ def main(
         batch_size=batch_size,
         alphas=alphas_list,
         mode="train",
+        chain=chain,
     )
     val_loader = create_dataloader(
         dataset_dict=dict_val,
         embeddings=val_embeddings,
         batch_size=batch_size,
         mode="test",
+        chain=chain,
     )
     log.info("INITIALIZE MODEL", hidden_layer_dimensions=dims_list, dropouts=dropouts)
     layers: List[Module] = []

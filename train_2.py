@@ -7,6 +7,7 @@ from typing import List, Tuple
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 import typer
 from models import EarlyStopping
 from sklearn.metrics import (
@@ -70,6 +71,7 @@ def get_outputs(
     embedding = torch.cat(embedding_list, dim=0)
     labels = torch.cat(label_list, dim=0)
     output = model(embedding)
+
     return labels, output
 
 
@@ -119,12 +121,11 @@ def get_metrics(
 def train_multiobjective(
     shared_module: torch.nn.Sequential,
     main_task_module: torch.nn.Sequential,
-    other_tasks: List[torch.nn.Sequential],
     train_loader: torch.utils.data.dataloader.DataLoader,
     val_loader: torch.utils.data.dataloader.DataLoader,
     optimizer: torch.optim.Adam,
     model_save_path: Path,
-    criterion: nn.BCEWithLogitsLoss,
+    criterion: nn.CrossEntropyLoss,
     embedding_models_list: List[str],
     n_epochs: int = 3,
     mask_prob: float = 0,
@@ -173,11 +174,16 @@ def train_multiobjective(
         # Training
         for i, (
             embedding,
-            main_labels,
+            _,
             len_heavy,
             len_light,
             *other_labels,
         ) in enumerate(tqdm(train_loader)):
+            main_labels = torch.stack(other_labels, dim=-1)
+
+            sum_labels = main_labels.sum(dim=-1)
+
+            main_labels = F.one_hot(sum_labels.long(), num_classes=6).to(torch.float)
             embedding, main_labels, len_heavy, len_light = (
                 embedding.to(device),
                 main_labels.to(device),
@@ -188,9 +194,6 @@ def train_multiobjective(
                 other_labels[i] = other_labels[i].to(device)
             embedding_list = []
             main_labels_list = []
-            other_labels_list: List[List[torch.Tensor]] = []
-            for i in range(len(other_labels)):
-                other_labels_list.append([])
             for i in range(len_heavy.shape[-1]):
                 heavy, light = len_heavy[i], len_light[i]
                 emb = get_embedding(
@@ -201,34 +204,20 @@ def train_multiobjective(
                 )
                 lab_main = main_labels[i][: heavy + light]
                 main_labels_list.append(lab_main)
-                for l, each in enumerate(other_labels):
-                    other_label = each[i][: heavy + light]
-                    other_labels_list[l].append(other_label)
                 drop_mask = torch.rand(emb.size(), device=emb.device) >= mask_prob
                 emb = emb * drop_mask.float()
                 embedding_list.append(emb)
             embedding = torch.cat(embedding_list, dim=0)
             main_labels = torch.cat(main_labels_list, dim=0)
-            other_labels = [torch.cat(each, dim=0) for each in other_labels_list]
             optimizer.zero_grad()
             shared_module = shared_module.to(device)
             main_task_module = main_task_module.to(device)
             features = shared_module(embedding)
-            output_main = main_task_module(features).view(-1)
+            output_main = main_task_module(features).view(-1, 6)
+
             loss_main = criterion(output_main, main_labels)
-            other_outputs = []
-            other_tasks_params = []
-            for other_task in other_tasks:
-                other_task = other_task.to(device)
-                other_outputs.append(other_task(features).view(-1))
-                other_tasks_params += [other_task.parameters()]
-            other_losses = []
-            for other_output, other_label in zip(other_outputs, other_labels):
-                other_losses.append(criterion(other_output, other_label))
             losses = [loss_main]
             task_params = [main_task_module.parameters()]
-            losses += [*other_losses]
-            task_params += [*other_tasks_params]
             losses = [loss.to(device) for loss in losses]
             mtl_backward(
                 losses=losses,
@@ -259,11 +248,13 @@ def train_multiobjective(
                     model=model,
                     embedding_models_list=embedding_models_list,
                 )
-                output_sigmoid = torch.sigmoid(output).view(-1).detach().cpu().numpy()
-                output = output.view(-1)
-                loss = criterion(output, labels)
+                output_sigmoid = torch.sigmoid(output)
+                loss = criterion(output[:,3], labels)
                 val_loss += loss.item() * embedding.size(0)
                 labels = labels.detach().cpu().numpy()
+
+                output_sigmoid = output_sigmoid[:,3:].sum(dim=-1)/output_sigmoid.sum(dim=-1)
+                output_sigmoid=output_sigmoid.detach().cpu().numpy()
                 all_outputs = np.concatenate((all_outputs, output_sigmoid))
                 all_targets = np.concatenate((all_targets, labels))
             val_loss /= float(len(val_loader.dataset))  # type: ignore[arg-type]
@@ -422,25 +413,14 @@ def main(
             layers.append(Dropout(dropouts_list[i]))
             layers.append(ReLU())
     shared_module = Sequential(*layers)
-    main_task_module = Sequential(Linear(dims_list[-1], 1))
+    main_task_module = Sequential(Linear(dims_list[-1], len(alphas_list)+1))
     params = [*shared_module.parameters(), *main_task_module.parameters()]
-    other_tasks = []
-    if alphas_list:
-        for i in range(len(alphas_list)):
-            other_task = Sequential(Linear(dims_list[-1], 1))
-            params += [*other_task.parameters()]
-            other_tasks.append(other_task)
     log.info(
         "INITIALIZE LOSS FUNCTION",
         weight=positive_weight,
         criterion="BCE with logits loss",
     )
-    criterion = nn.BCEWithLogitsLoss(
-        pos_weight=torch.tensor(
-            [positive_weight],
-            device=torch.device(f"cuda:{gpu}" if torch.cuda.is_available() else "cpu"),
-        )
-    )
+    criterion = nn.CrossEntropyLoss()
     log.info("INITIALIZE OPTIMIZER", learning_rate=learning_rate, weight_decay=l2_pen)
     optimizer = torch.optim.Adam(params, lr=learning_rate, weight_decay=l2_pen)
     model_save_path = result_folder / Path("checkpoint.pt")
@@ -458,7 +438,6 @@ def main(
     ) = train_multiobjective(
         shared_module=shared_module,
         main_task_module=main_task_module,
-        other_tasks=other_tasks,
         train_loader=train_loader,
         val_loader=val_loader,
         optimizer=optimizer,

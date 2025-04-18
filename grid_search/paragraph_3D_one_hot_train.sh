@@ -13,5 +13,4 @@ for seed in "${seeds[@]}" ; do
     --gpu 1 --pdb-folder-path-train $pdb_folder_path \
     --pdb-folder-path-val $pdb_folder_path --override
     python evaluate_graph.py $result_folder/$seed $test_folder $test_csv --pdb-folder-path-test $pdb_folder_path
-
 done
