@@ -18,7 +18,7 @@ from tqdm import tqdm
 
 from paraplume.torch_dataset import create_dataloader
 from paraplume.utils import get_logger, read_pdb_to_dataframe
-from paraplume.utils_paired import get_embedding_paired
+from paraplume.utils_single import get_embedding_single
 
 warnings.filterwarnings("ignore")
 app = typer.Typer(add_completion=False)
@@ -31,7 +31,8 @@ def test(
     save_path: Path,
     pdb_path : Path = Path("/home/gathenes/all_structures/imgt_renumbered_expanded/"),
     embedding_model_list=["igT5"],
-    save=False,
+    save:bool=False,
+    chain:str="heavy",
 ):
     # Training loop
     device = torch.device("cpu")
@@ -48,38 +49,36 @@ def test(
         for i, (
             embedding,
             labels,
-            heavy,
-            light,
+            chain_length,
             pdb_code,
-            inverse_heavy,
-            inverse_light,
+            numbers,
         ) in tqdm(enumerate(test_loader)):
             pdb_code=pdb_code[0]
-            pdb_dict[pdb_code]={"heavy prediction":{},"heavy label":{}, "light label":{}, "light prediction":{}}
+            pdb_dict[pdb_code]={"prediction":{},"label":{}}
             embedding, labels = embedding.to(device), labels.to(device)
             embedding, labels=embedding[0], labels[0]
-            emb = get_embedding_paired(embedding=embedding, embedding_models=embedding_model_list, heavy=heavy, light=light)
+            emb = get_embedding_single(embedding=embedding, embedding_models=embedding_model_list, chain_length=chain_length)
             output=model(emb)
             output=output.view(-1)
-            for i in range(heavy):
-                pdb_dict[pdb_code]["heavy prediction"][inverse_heavy[i][0]]=float(output[i].detach().cpu().numpy())
-                pdb_dict[pdb_code]["heavy label"][inverse_heavy[i][0]]=float(labels[i].detach().cpu().numpy())
-            for i in range(light):
-                pdb_dict[pdb_code]["light prediction"][inverse_light[i][0]]=float(output[heavy+i].detach().cpu().numpy())
-                pdb_dict[pdb_code]["light label"][inverse_light[i][0]]=float(labels[heavy+i].detach().cpu().numpy())
+            for i in range(chain_length):
+                pdb_dict[pdb_code]["prediction"][numbers[i][0]]=float(output[i].detach().cpu().numpy())
+                pdb_dict[pdb_code]["label"][numbers[i][0]]=float(labels[i].detach().cpu().numpy())
             data_pdb= read_pdb_to_dataframe((pdb_path / Path(f"{pdb_code}.pdb")).as_posix())
-            light_chain, heavy_chain, antigen_chain = chains.query("pdb==@pdb_code")[["Lchain", "Hchain", "antigen_chain"]].values[0]
-            data_pdb_heavy=data_pdb.query("chain_id==@heavy_chain").query("residue_number<129")
-            data_pdb_light=data_pdb.query("chain_id==@light_chain").query("residue_number<128")
+            chain_pdb = chains.query("pdb==@pdb_code")
+            antigen_chain = chain_pdb["antigen_chain"].values[0]
             data_pdb_antigen=data_pdb.query("chain_id==@antigen_chain")
-            data_pdb_heavy["b_factor"]=data_pdb_heavy["IMGT"].map(pdb_dict[pdb_code]["heavy prediction"])
-            data_pdb_light["b_factor"]=data_pdb_light["IMGT"].map(pdb_dict[pdb_code]["light prediction"])
-            data_pdb_heavy["occupancy"]=data_pdb_heavy["IMGT"].map(pdb_dict[pdb_code]["heavy label"])
-            data_pdb_light["occupancy"]=data_pdb_light["IMGT"].map(pdb_dict[pdb_code]["light label"])
+            if chain=="heavy":
+                chain_id = chain_pdb["Hchain"].values[0]
+                data_pdb_chain=data_pdb.query("chain_id==@chain_id").query("residue_number<129")
+            else :
+                chain_id = chain_pdb["Lchain"].values[0]
+                data_pdb_chain=data_pdb.query("chain_id==@chain_id").query("residue_number<128")
+            data_pdb_chain["b_factor"]=data_pdb_chain["IMGT"].map(pdb_dict[pdb_code]["prediction"])
+            data_pdb_chain["occupancy"]=data_pdb_chain["IMGT"].map(pdb_dict[pdb_code]["label"])
             data_pdb_antigen["b_factor"]=0
             data_pdb_antigen["occupancy"]=0
 
-            new_data_pdb = pd.concat([data_pdb_heavy, data_pdb_light, data_pdb_antigen])
+            new_data_pdb = pd.concat([data_pdb_chain,data_pdb_antigen])
 
             atomic_df = PandasPdb().read_pdb((pdb_path / Path(f"{pdb_code}.pdb")).as_posix())
             atomic_df = atomic_df.get_model(1)
@@ -87,23 +86,22 @@ def test(
             if save:
                 atomic_df.to_pdb(save_path / f"{pdb_code}.pdb", records = ["ATOM"])
 
-            ab_only = pd.concat([data_pdb_heavy, data_pdb_light])
             atomic_df = PandasPdb().read_pdb((pdb_path / Path(f"{pdb_code}.pdb")).as_posix())
             atomic_df = atomic_df.get_model(1)
-            atomic_df.df["ATOM"] = ab_only
+            atomic_df.df["ATOM"] = data_pdb_chain
             if save:
                 atomic_df.to_pdb(save_path / f"{pdb_code}_abonly.pdb", records = ["ATOM"])
 
-            data_pdb_heavy["chain_type"]="heavy"
-            data_pdb_light["chain_type"]="light"
-            pdb_to_concat = pd.concat([data_pdb_heavy,data_pdb_light]).rename(columns={"occupancy":"labels", "b_factor":"prediction"})
+            data_pdb_chain["chain_type"]=chain
+            pdb_to_concat = data_pdb_chain.rename(columns={"occupancy":"labels", "b_factor":"prediction"})
             pdb_to_concat["pdb"]=pdb_code
             pdb_to_concat = pdb_to_concat.query("atom_name=='CA'")[["pdb","chain_type","residue_name","IMGT","labels", "prediction"]]
 
             preds = pdb_to_concat["prediction"].tolist()
             preds_bin = (pdb_to_concat["prediction"] >= 0.5).astype(int).tolist()
-
             labs = pdb_to_concat["labels"].tolist()
+            if len(set(labs)) == 1:
+                continue
             ap = average_precision_score(labs, preds)
             roc = roc_auc_score(labs, preds)
             mcc = matthews_corrcoef(labs, preds_bin)
@@ -162,15 +160,17 @@ def main(
         help="Add name to end of file."
     ),
 ) -> None:
-    chains=pd.read_csv(chains_path)
     result_folder=model_path.parents[0]
-    print(result_folder.as_posix())
-    with open(test_folder_path / Path("dict.json"), encoding="utf-8") as f :
-        dict_test = json.load(f)
-    test_embeddings = torch.load(test_folder_path / Path("embeddings.pt"), weights_only=True)
-    test_loader = create_dataloader(dataset_dict=dict_test, embeddings=test_embeddings, batch_size=1, mode="predict")
     with open(result_folder / Path("summary_dict.json"), encoding="utf-8") as f:
         summary_dict = json.load(f)
+    chain=summary_dict["chain"]
+    chains_df=pd.read_csv(chains_path)
+    print(result_folder.as_posix())
+    with open(test_folder_path / Path(f"dict_{chain}.json"), encoding="utf-8") as f :
+        dict_test = json.load(f)
+    test_embeddings = torch.load(test_folder_path / Path(f"embeddings_{chain}.pt"), weights_only=True)
+    test_loader = create_dataloader(dataset_dict=dict_test, embeddings=test_embeddings, batch_size=1, mode="predict", chain=chain)
+
     dims=summary_dict["dims"].split(",")
     dims=[int(each) for each in dims]
     dropouts=summary_dict["dropouts"]
@@ -203,17 +203,19 @@ def main(
     total_dataframe, mean_ap, mean_roc, mean_f1, mean_mcc, flattened_ap, flattened_auc, flattened_f1, flattened_mcc = test(
         model=model,
         test_loader=test_loader,
-        chains=chains,
+        chains=chains_df,
         save_path=save_path,
         pdb_path=pdb_path,
         embedding_model_list=embedding_models_list,
         save=save,
+        chain=chain,
     )
     total_dataframe.to_csv(result_folder/Path(f"prediction_{test_folder_path.stem}{name}.csv"))
     args_dict = {
         "model_path": str(model_path),
         "test_folder_path": str(test_folder_path),
         "result_folder": str(result_folder),
+        "chain":chain,
     }
     args_dict["ap"]=mean_ap
     args_dict["roc"]=mean_roc

@@ -7,6 +7,12 @@ from typing import List
 import numpy as np
 import torch
 import typer
+from torch import nn
+from torch.nn import Dropout, Linear, Module, ReLU, Sequential
+from torchjd import mtl_backward
+from torchjd.aggregation import UPGrad
+from tqdm import tqdm
+
 from paraplume.models import EarlyStopping
 from paraplume.torch_dataset import create_dataloader
 from paraplume.utils import (
@@ -16,11 +22,6 @@ from paraplume.utils import (
     save_plot,
 )
 from paraplume.utils_paired import get_embedding_paired, get_outputs_paired
-from torch import nn
-from torch.nn import Dropout, Linear, Module, ReLU, Sequential
-from torchjd import mtl_backward
-from torchjd.aggregation import UPGrad
-from tqdm import tqdm
 
 app = typer.Typer(add_completion=False)
 log = get_logger()
@@ -151,7 +152,7 @@ def train(
                 features=features,
                 tasks_params=task_params,
                 shared_params=shared_module.parameters(),
-                A=aggregator,
+                aggregator=aggregator,
             )
             optimizer.step()
             train_loss += loss_main.item() * embedding.size(0)

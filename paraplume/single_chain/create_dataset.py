@@ -14,16 +14,45 @@ import torch
 import torch.nn.functional as F
 import typer
 from antiberty import AntiBERTyRunner
-from paraplume.utils import get_logger
-from paraplume.utils_single import build_dictionary_single
 from tqdm import tqdm
 from transformers import BertModel, BertTokenizer, T5EncoderModel, T5Tokenizer
+
+from paraplume.utils import get_logger
+from paraplume.utils_single import build_dictionary_single
 
 app = typer.Typer(add_completion=False)
 log = get_logger()
 warnings.filterwarnings("ignore")
 # pylint: disable=E1101
 
+def get_llm_to_embedding_dict(
+    sequences:List,
+    emb_proc_size:int,
+    llm_list:List[str]):
+    """
+
+    Args:
+        sequence_heavy_emb (List): Heavy sequences
+        sequence_light_emb (List): Light sequences
+        emb_proc_size (int): Batch size to create embeddings without memory explosion.
+
+    Returns:
+        torch.Tensor: Embeddings
+    """
+    llm_to_func =  {
+        "ablang2": compute_ablang_embeddings,
+        "igT5": compute_igt5_embeddings,
+        "igbert": compute_igbert_embeddings,
+        "esm": compute_esm_embeddings,
+        "antiberty": compute_antiberty_embeddings,
+        "prot-t5": compute_t5_embeddings,
+    }
+    llm_to_emb={}
+    for llm in llm_list:
+        log.info("CREATING EMBEDDINGS", embedding_model=llm)
+        embedding = process_batch(llm_to_func[llm],sequences, emb_proc_size)
+        llm_to_emb[llm]=embedding
+    return llm_to_emb
 
 def create_embeddings_from_dict(
     dataset_dict: Dict[str, Dict[str, Any]],
@@ -159,7 +188,7 @@ def compute_esm_embeddings(sequence_emb: List) -> torch.Tensor:
     Returns:
         torch.Tensor: ESM embeddings.
     """
-    device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     esm_model, esm_alphabet = esm.pretrained.esm2_t33_650M_UR50D()
     esm_model = esm_model.to(device)  # Move model to GPU
@@ -212,7 +241,7 @@ def compute_igt5_embeddings(sequence_emb: List) -> torch.Tensor:
     Returns:
         torch.Tensor: IgT5 embeddings.
     """
-    device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     sequences=[" ".join(seq) for seq in sequence_emb]
     igt5_tokeniser = T5Tokenizer.from_pretrained("Exscientia/IgT5_unpaired", do_lower_case=False)
@@ -241,7 +270,7 @@ def compute_igbert_embeddings(sequence_emb: List) -> torch.Tensor:
     Returns:
         torch.Tensor: Ig BERT embeddings.
     """
-    device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     sequences=[" ".join(seq) for seq in sequence_emb]
     bert_tokeniser = BertTokenizer.from_pretrained("Exscientia/IgBert_unpaired", do_lower_case=False)
     bert_model = BertModel.from_pretrained("Exscientia/IgBert_unpaired", add_pooling_layer=False).to(device)  # Move to GPU
@@ -269,7 +298,7 @@ def compute_t5_embeddings(sequence_emb: List) -> torch.Tensor:
     Returns:
         torch.Tensor: Prot-T5 embeddings.
     """
-    device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     prot_t5_tokenizer = T5Tokenizer.from_pretrained(
         "Rostlab/prot_t5_xl_half_uniref50-enc", do_lower_case=False
     )

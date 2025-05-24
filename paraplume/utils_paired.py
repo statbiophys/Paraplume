@@ -61,6 +61,30 @@ def get_embedding_paired(
     emb = torch.cat(emb_list, dim=1)
     return emb
 
+def process_embedding_paired(
+    llm:str, emb:torch.Tensor, heavy: int, light: int
+) -> torch.Tensor:
+    """Return tensor of embedding given lengths of heavy and light chains and embeddings to use.
+
+    Args:
+        embedding (torch.Tensor): Total embedding in which to do selection.
+        embedding_models (List[str]): List of embeddings to use.
+        heavy (int): Heavy chain length.
+        light (int): Light chain length.
+
+    Returns:
+        torch.Tensor: Embedding tensor to be used by the model.
+    """
+    embedding_coords_aa = {
+        "ablang2": list(range(1, heavy + 1)) + list(range(heavy + 4, heavy + light + 4)),
+        "igT5": list(range(1, heavy + 1)) + list(range(heavy + 2, heavy + light + 2)),
+        "igbert": list(range(1, heavy + 1)) + list(range(heavy + 2, heavy + light + 2)),
+        "esm": list(range(1, heavy + light + 1)),
+        "antiberty": list(range(1, heavy + light + 1)),
+        "prot-t5": list(range(heavy + light)),
+    }
+    ran_aa = embedding_coords_aa[llm]
+    return emb[ran_aa,:]
 
 def build_dictionary_paired(
     pdb_dataframe: pd.DataFrame,
@@ -97,47 +121,56 @@ def build_dictionary_paired(
         if len(df_chain_antigen)== 0:
             raise ValueError(f"Empty antigen, please check pdb {pdb_code}")
 
-        # Get binding residues
-        position_dict_heavy, distance_dict_heavy = get_binding_residues(
-            df_chain_heavy, df_chain_antigen
-        )
-        labels_heavy_4_5, sequence_heavy, numbers_heavy = get_labels(
-            position_dict_heavy, distance_dict_heavy, alpha=4.5
-        )
-        position_dict_light, distance_dict_light = get_binding_residues(
-            df_chain_light, df_chain_antigen
-        )
-        labels_light_4_5, sequence_light, numbers_light = get_labels(
-            position_dict_light, distance_dict_light, alpha=4.5
-        )
-
-        # get distances
-        distances_heavy = [np.min(distance_dict_heavy[each]) for each in numbers_heavy]
-        distances_light = [np.min(distance_dict_light[each]) for each in numbers_light]
-
-        dataset_dict[index]["H_id distances"] = distances_heavy
-        dataset_dict[index]["L_id distances"] = distances_light
-
-        dataset_dict[index]["H_id numbers"] = numbers_heavy
-        dataset_dict[index]["L_id numbers"] = numbers_light
-
-        dataset_dict[index]["H_id sequence"] = "".join(sequence_heavy)
-        dataset_dict[index]["L_id sequence"] = "".join(sequence_light)
-
-        dataset_dict[index]["H_id labels 4.5"] = labels_heavy_4_5
-        dataset_dict[index]["L_id labels 4.5"] = labels_light_4_5
-
-        for alpha in [3, 3.5, 4, 5, 5.5, 6, 6.5, 7, 7.5]:
-            labels_heavy, _, _ = get_labels(position_dict_heavy, distance_dict_heavy, alpha=alpha)
-            labels_light, _, _ = get_labels(
-                position_dict_light,
-                distance_dict_light,
-                alpha=alpha,
+        if len(df_chain_heavy)>0:
+            position_dict_heavy, distance_dict_heavy = get_binding_residues(
+                df_chain_heavy, df_chain_antigen
             )
-            dataset_dict[index][f"H_id labels {alpha}"] = labels_heavy
-            dataset_dict[index][f"L_id labels {alpha}"] = labels_light
+            labels_heavy_4_5, sequence_heavy, numbers_heavy = get_labels(
+                position_dict_heavy, distance_dict_heavy, alpha=4.5
+            )
+            distances_heavy = [np.min(distance_dict_heavy[each]) for each in numbers_heavy]
+            dataset_dict[index]["H_id distances"] = distances_heavy
+            dataset_dict[index]["H_id numbers"] = numbers_heavy
+            dataset_dict[index]["H_id sequence"] = "".join(sequence_heavy)
+            dataset_dict[index]["H_id labels 4.5"] = labels_heavy_4_5
+            for alpha in [3, 3.5, 4, 5, 5.5, 6, 6.5, 7, 7.5]:
+                labels_heavy, _, _ = get_labels(position_dict_heavy, distance_dict_heavy, alpha=alpha)
+                dataset_dict[index][f"H_id labels {alpha}"] = labels_heavy
+        else:
+            dataset_dict[index]["H_id distances"] = []
+            dataset_dict[index]["H_id numbers"] = []
+            dataset_dict[index]["H_id sequence"] = ""
+            dataset_dict[index]["H_id labels 4.5"] = []
+            for alpha in [3, 3.5, 4, 5, 5.5, 6, 6.5, 7, 7.5]:
+                dataset_dict[index][f"H_id labels {alpha}"] = []
 
-        # Save pdb code
+        if len(df_chain_light)>0:
+            position_dict_light, distance_dict_light = get_binding_residues(
+                df_chain_light, df_chain_antigen
+            )
+            labels_light_4_5, sequence_light, numbers_light = get_labels(
+                position_dict_light, distance_dict_light, alpha=4.5
+            )
+            distances_light = [np.min(distance_dict_light[each]) for each in numbers_light]
+            dataset_dict[index]["L_id distances"] = distances_light
+            dataset_dict[index]["L_id numbers"] = numbers_light
+            dataset_dict[index]["L_id sequence"] = "".join(sequence_light)
+            dataset_dict[index]["L_id labels 4.5"] = labels_light_4_5
+            for alpha in [3, 3.5, 4, 5, 5.5, 6, 6.5, 7, 7.5]:
+                labels_light, _, _ = get_labels(
+                    position_dict_light,
+                    distance_dict_light,
+                    alpha=alpha,
+                )
+                dataset_dict[index][f"L_id labels {alpha}"] = labels_light
+        else:
+            dataset_dict[index]["L_id distances"] = []
+            dataset_dict[index]["L_id numbers"] = []
+            dataset_dict[index]["L_id sequence"] = ""
+            dataset_dict[index]["L_id labels 4.5"] = []
+            for alpha in [3, 3.5, 4, 5, 5.5, 6, 6.5, 7, 7.5]:
+                dataset_dict[index][f"L_id labels {alpha}"] = []
+
         dataset_dict[index]["pdb_code"] = pdb_code
 
     return dataset_dict

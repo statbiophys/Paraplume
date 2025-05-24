@@ -23,6 +23,30 @@ def rec_dd():
     """
     return defaultdict(rec_dd)
 
+def process_embedding_single(
+    llm:str, emb:torch.Tensor, chain_length: int
+) -> torch.Tensor:
+    """Return tensor of embedding given lengths of heavy and light chains and embeddings to use.
+
+    Args:
+        embedding (torch.Tensor): Total embedding in which to do selection.
+        embedding_models (List[str]): List of embeddings to use.
+        heavy (int): Heavy chain length.
+        light (int): Light chain length.
+
+    Returns:
+        torch.Tensor: Embedding tensor to be used by the model.
+    """
+    embedding_coords_aa = {
+        "ablang2": list(range(1, chain_length + 1)),
+        "igT5": list(range(1, chain_length + 1)),
+        "igbert": list(range(1, chain_length + 1)),
+        "esm": list(range(1, chain_length + 1)),
+        "antiberty": list(range(1, chain_length + 1)),
+        "prot-t5": list(range(chain_length)),
+    }
+    ran_aa = embedding_coords_aa[llm]
+    return emb[ran_aa,:]
 
 def get_embedding_single(
     embedding: torch.Tensor, embedding_models: List[str], chain_length: int

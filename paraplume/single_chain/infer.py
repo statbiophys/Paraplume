@@ -7,13 +7,15 @@ import numpy as np
 import pandas as pd
 import torch
 import typer
-from create_dataset import create_emebddings_from_seq
+from create_dataset import get_llm_to_embedding_dict
 from torch.nn import Dropout, Linear, ReLU, Sequential, Sigmoid
 
 app = typer.Typer(add_completion=False)
 warnings.filterwarnings("ignore")
+from tqdm import tqdm
+
 from paraplume.utils import get_logger
-from paraplume.utils_paired import get_embedding_paired
+from paraplume.utils_single import process_embedding_single
 
 log = get_logger()
 
@@ -36,17 +38,21 @@ def predict_from_df(
         "--name",
         help="Extension to add to the file.",
     ),
-    save_embeddings:bool=typer.Option(
-        False,
-        "--save-embeddings",
-        help="Whether to save the embeddings or not.\
-            Not advised for large files."
-        ),
     gpu:int=typer.Option(
         1,
         "--gpu",
         help="Which GPU to use."
-    )) -> None:
+    ),
+    compute_embeddings:bool=typer.Option(
+        False,
+        "--compute-embeddings",
+        help="Compute paratope and classical embeddings for each sequence."),
+    emb_proc_size: int = typer.Option(
+        100,
+        "--emb-proc-size",
+        help="We create embeddings batch by batch to avoid memory explosion. This is the batch\
+            size. Optimal value depends on your computer. Defaults to 100.",
+    ),) -> None:
     """Predict paratope from sequence."""
     summary_dict_path = result_folder / Path("summary_dict.json")
     log.info("Loading training summary dictionary.", path=summary_dict_path.as_posix())
@@ -74,34 +80,37 @@ def predict_from_df(
     device = torch.device(f"cuda:{gpu}" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
 
-    embedding_models = summary_dict["embedding_models"]
-    if embedding_models == "all":
-        embedding_models = "ablang2,igbert,igT5,esm,antiberty,prot-t5"
-    embedding_models_list = embedding_models.split(",")
-
+    llm_models = summary_dict["embedding_models"]
+    if llm_models == "all":
+        llm_models = "ablang2,igbert,igT5,esm,antiberty,prot-t5"
+    llm_list = llm_models.split(",")
+    chain=summary_dict["chain"]
     df = pd.read_csv(file_path)
-    sequences_heavy = df["sequence_heavy"].tolist()
-    sequences_light = df["sequence_light"].tolist()
-    embeddings = create_emebddings_from_seq(sequences_heavy,sequences_light,emb_proc_size=50)
-    if save_embeddings:
-        torch.save(embeddings, f"{str(file_path.parents[0])}/embeddings.pt")
+    sequences = df[f"sequence_{chain}"].tolist()
+    llm_to_embedding_dict = get_llm_to_embedding_dict(sequences,
+                                                    emb_proc_size=emb_proc_size,
+                                                    llm_list=llm_list)
 
-    heavy_outputs=[]
-    light_outputs=[]
+    outputs=[]
     embeddings_classical = []
     embeddings_paratope=[]
-    for i, embedding in enumerate(embeddings):
-        heavy, light = len(sequences_heavy[i]), len(sequences_light[i])
-        emb = get_embedding_paired(
-            embedding=embedding,
-            embedding_models=embedding_models_list,
-            heavy=heavy,
-            light=light,
-        )
-        emb=emb.to(device)
+    for i, seq in tqdm(enumerate(sequences)):
+        chain_length = len(seq)
+        emb_llm_list_i=[]
+        for llm, emb_llm in llm_to_embedding_dict.items():
+            emb_processed_i_llm = process_embedding_single(
+                llm=llm,
+                emb=emb_llm[i],
+                chain_length=chain_length,
+            )
+            emb_llm_list_i.append(emb_processed_i_llm)
+        emb_processed_i = torch.cat(emb_llm_list_i, dim=-1)
+        emb=emb_processed_i.to(device)
         output=np.round(model(emb).cpu().detach().numpy().flatten().astype(np.float64), 12).tolist()
-        heavy_outputs.append(output[:heavy])
-        light_outputs.append(output[heavy:])
+        outputs.append(output)
+
+        if not compute_embeddings:
+            continue
         emb_classical = emb.sum(0)/emb.shape[0]
         emb_classical=np.round(emb_classical.cpu().detach().numpy().flatten().astype(np.float64), 12).tolist()
         embeddings_classical.append(emb_classical)
@@ -112,22 +121,17 @@ def predict_from_df(
         emb_paratope = np.round(emb_paratope.flatten().astype(np.float64), 12).tolist()
         embeddings_paratope.append(emb_paratope)
 
-    df["embeddings_paratope"]=embeddings_paratope
-    df["embeddings_classical"]=embeddings_classical
-    df["model_prediction_heavy"]=heavy_outputs
-    df["model_prediction_light"]=light_outputs
+    if compute_embeddings:
+        df["embeddings_paratope"]=embeddings_paratope
+        df["embeddings_classical"]=embeddings_classical
+    df[f"model_prediction_{chain}"]=outputs
     result_path = file_path.parents[0] / Path(f"{name}paratope_"+file_path.name)
     df.to_csv(result_path)
     return output
 
 @app.command()
 def predict_from_sequence(
-    sequence_heavy: str = typer.Argument(
-        ...,
-        help="Path of csv file to use for pdb list.",
-        show_default=False,
-    ),
-    sequence_light: str = typer.Argument(
+    sequence: str = typer.Argument(
         ...,
         help="Path of csv file to use for pdb list.",
         show_default=False,
@@ -161,22 +165,31 @@ def predict_from_sequence(
     model.load_state_dict(torch.load(model_path, weights_only=True))
     model.eval()
 
-    embedding = create_emebddings_from_seq([sequence_heavy],[sequence_light],emb_proc_size=1)
-    heavy, light = len(sequence_heavy), len(sequence_light)
-    embedding_models = summary_dict["embedding_models"]
-    if embedding_models == "all":
-        embedding_models = "ablang2,igbert,igT5,esm,antiberty,prot-t5"
-    embedding_models_list = embedding_models.split(",")
-    emb = get_embedding_paired(
-        embedding=embedding[0],
-        embedding_models=embedding_models_list,
-        heavy=heavy,
-        light=light,
-    )
+    llm_models = summary_dict["embedding_models"]
+    if llm_models == "all":
+        llm_models = "ablang2,igbert,igT5,esm,antiberty,prot-t5"
+    llm_list = llm_models.split(",")
+    llm_to_embedding_dict = get_llm_to_embedding_dict([sequence],
+                                                    emb_proc_size=1,
+                                                    llm_list=llm_list)
+    chain_length= len(sequence)
+    embeddings_processed_list=[]
+    for llm,emb in llm_to_embedding_dict.items():
+        emb_sequence=emb[0]
+        emb_processed = process_embedding_single(
+            llm=llm,
+            emb=emb_sequence,
+            chain_length=chain_length,
+        )
+        embeddings_processed_list.append(emb_processed)
+    embeddings_processed = torch.cat(embeddings_processed_list, dim=-1)
     device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
     model = model.to(device)
-    emb=emb.to(device)
-    output = model(emb)
+    embeddings_processed=embeddings_processed.to(device)
+    output = model(embeddings_processed).cpu().detach().numpy().flatten()
+    print("===== Paratope predictions =====")
+    for each in zip(sequence,output[:chain_length]):
+        print(f"{each[0]}  --> {np.round(float(each[1]),3)}")
     return output
 
 if __name__ == "__main__":
