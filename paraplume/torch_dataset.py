@@ -1,25 +1,20 @@
 """Implement the dataloader."""
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import torch
-import torch.nn.functional as F
+import torch.nn.functional as F  # noqa : N812
 from torch.utils.data import Dataset
 
-from paraplume.utils_paired import (
-    get_other_labels_paired,
-)
-from paraplume.utils_single import get_other_labels_single
 
-
-class ParatopeDatasetPairedChain(Dataset):
+class ParaplumeDataset(Dataset):
     """Create dataset from dictionary of sequences and labels, and from embedidngs."""
 
     def __init__(
         self,
-        dataset_dict: Dict[str, Dict[str, Any]],
+        dataset_dict: dict[str, dict[str, Any]],
         embeddings: torch.Tensor,
-        alphas: Optional[List] = None,
+        alphas: list | None = None,
         mode: str = "train",
     ):
         """Initialize."""
@@ -32,7 +27,7 @@ class ParatopeDatasetPairedChain(Dataset):
         """Return number of sequences in dataset."""
         return self.embeddings.shape[0]
 
-    def __getitem__(self, index) -> Tuple:
+    def __getitem__(self, index) -> tuple:
         """Return embeddings and labels for training model for given index."""
         main_labels_heavy = self.dataset_dict[str(index)]["H_id labels 4.5"]
         main_labels_light = self.dataset_dict[str(index)]["L_id labels 4.5"]
@@ -51,7 +46,7 @@ class ParatopeDatasetPairedChain(Dataset):
         )
         len_heavy = len(main_labels_heavy)
         len_light = len(main_labels_light)
-        labels_list = get_other_labels_paired(self.dataset_dict, index, alphas=self.alphas)
+        labels_list = get_other_labels(self.dataset_dict, index, alphas=self.alphas)
 
         if self.mode == "train":
             return (
@@ -75,70 +70,46 @@ class ParatopeDatasetPairedChain(Dataset):
             )
         raise ValueError("Invalid mode. Choose from 'train', 'test', 'predict'")
 
-class ParatopeDatasetSingleChain(Dataset):
-    """Create dataset from dictionary of sequences and labels, and from embedidngs."""
+def get_other_labels(
+    dataset_dict: dict[str, dict[str, Any]], index: int, alphas: list | None = None
+) -> list[torch.Tensor]:
+    """Return list of tensors of padded labels for different alphas.
 
-    def __init__(
-        self,
-        dataset_dict: Dict[str, Dict[str, Any]],
-        embeddings: torch.Tensor,
-        alphas: Optional[List] = None,
-        mode: str = "train",
-    ):
-        """Initialize."""
-        self.mode = mode
-        self.dataset_dict = dataset_dict
-        self.embeddings = embeddings
-        self.alphas = alphas
+    Args:
+        dataset_dict (Dict[str, Dict[str, Any]]): Dictionary mapping indices to positions, \
+            imgt numbers and labels.
+        index (int): Index of dictionary.
+        alphas (Optional[List]): List of alphas to use for multi objective \
+            optimization. Defaults to None.
 
-    def __len__(self):
-        """Return number of sequences in dataset."""
-        return self.embeddings.shape[0]
-
-    def __getitem__(self, index) -> Tuple:
-        """Return embeddings and labels for training model for given index."""
-        main_labels = self.dataset_dict[str(index)]["labels 4.5"]
-        length = len(main_labels)
-        numbers = self.dataset_dict[str(index)]["numbers"]
-        pdb_code = self.dataset_dict[str(index)]["pdb_code"]
-        embedding = self.embeddings[index, :, :]
-        main_labels = torch.FloatTensor(
+    Returns
+    -------
+        List[torch.Tensor]: List of padded labels.
+    """
+    labels_list: list[torch.Tensor] = []
+    if alphas is None:
+        return labels_list
+    for alpha in alphas:
+        labels_heavy = dataset_dict[str(index)][f"H_id labels {alpha}"]
+        labels_light = dataset_dict[str(index)][f"L_id labels {alpha}"]
+        labels_paired = labels_heavy + labels_light
+        labels_padded = torch.FloatTensor(
             F.pad(
-                torch.FloatTensor(main_labels),
-                (0, 285 - len(torch.FloatTensor(main_labels))),
+                torch.FloatTensor(labels_paired),
+                (0, 285 - len(torch.FloatTensor(labels_paired))),
                 "constant",
                 0,
             )
         )
-
-        labels_list = get_other_labels_single(self.dataset_dict, index, alphas=self.alphas)
-
-        if self.mode == "train":
-            return (
-                embedding,
-                main_labels,
-                length,
-                *labels_list,
-            )
-        if self.mode == "test":
-            return (embedding, main_labels, length)
-        if self.mode == "predict":
-            return (
-                embedding,
-                main_labels,
-                length,
-                pdb_code,
-                numbers,
-            )
-        raise ValueError("Invalid mode. Choose from 'train', 'test', 'predict'")
+        labels_list.append(labels_padded)
+    return labels_list
 
 def create_dataloader(
-    dataset_dict: Dict[str, Dict[str, Any]],
+    dataset_dict: dict[str, dict[str, Any]],
     embeddings: torch.Tensor,
-    alphas: Optional[List[str]] = None,
+    alphas: list[str] | None = None,
     mode: str = "train",
     batch_size: int = 16,
-    chain="paired",
 ) -> torch.utils.data.dataloader.DataLoader:
     """Take dataset_dict and embeddings and return dataloader.
 
@@ -150,19 +121,12 @@ def create_dataloader(
             or "predict" mode.
         alphas (List[str], optional): Alphas to use for multi objective training. Defaults to None.
 
-    Returns:
+    Returns
+    -------
         torch.utils.data.dataloader.DataLoader: Dataloader to use for training.
     """
-    if chain=="paired":
-        shuffle = mode == "train"
-        dataset = ParatopeDatasetPairedChain(
-            dataset_dict=dataset_dict, embeddings=embeddings, alphas=alphas, mode=mode
-        )
-        dataset_loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
-        return dataset_loader
     shuffle = mode == "train"
-    dataset = ParatopeDatasetSingleChain(
+    dataset = ParaplumeDataset(
         dataset_dict=dataset_dict, embeddings=embeddings, alphas=alphas, mode=mode
     )
-    dataset_loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
-    return dataset_loader
+    return torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
