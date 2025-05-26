@@ -306,8 +306,8 @@ def build_dictionary(
     for index in tqdm(range(len(pdb_dataframe))):
         # get pdb codes and chain names
         pdb_code = pdb_dataframe.iloc[index]["pdb"]
-        h_id = pdb_dataframe.iloc[index]["Hchain"] # noqa: F841
-        l_id = pdb_dataframe.iloc[index]["Lchain"] # noqa: F841
+        h_id = pdb_dataframe.iloc[index]["Hchain"]  # noqa: F841
+        l_id = pdb_dataframe.iloc[index]["Lchain"]  # noqa: F841
         antigen_id = pdb_dataframe.iloc[index]["antigen_chain"]
 
         # load dataframe
@@ -317,7 +317,7 @@ def build_dictionary(
         # Get each dataframe for each chain type
         df_chain_heavy = df_pdb.query("chain_id == @h_id and residue_number<129")
         df_chain_light = df_pdb.query("chain_id == @l_id and residue_number<128")
-        antigen_ids = antigen_id.split(";") # noqa: F841
+        antigen_ids = antigen_id.split(";")  # noqa: F841
         df_chain_antigen = df_pdb.query("chain_id.isin(@antigen_ids)")
         if len(df_chain_antigen) == 0:
             raise ValueError(f"Empty antigen, please check pdb {pdb_code}")
@@ -417,7 +417,10 @@ def get_embedding(
         emb_list.append(embedding[ran_aa][:, ran_embpos])
     return torch.cat(emb_list, dim=1)
 
+
 log = get_logger()
+
+
 class EarlyStopping:
     """Early stops the training if validation loss doesn't improve after a given patience."""
 
@@ -444,7 +447,7 @@ class EarlyStopping:
         self.delta = delta
         self.path = path
 
-    def __call__(self, val_loss:float, model:torch.nn.Sequential):
+    def __call__(self, val_loss: float, model: torch.nn.Sequential):
         """Save weights if val_loss increased for less than 'patience' epochs, +1 counter otherwise.
 
         Args:
@@ -460,8 +463,8 @@ class EarlyStopping:
         else:
             self.best_score = score
             log.info(
-                "AP AUC increased", before = round(self.val_loss_min, 6), after = round(val_loss, 6)
-                )
+                "AP AUC increased", before=-round(self.val_loss_min, 6), after=-round(val_loss, 6)
+            )
             self.val_loss_min = val_loss
             self.counter = 0
             torch.save(model.state_dict(), self.path.as_posix())

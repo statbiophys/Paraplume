@@ -9,6 +9,7 @@ import torch
 import typer
 from torch import nn
 from torch.nn import Dropout, Linear, ReLU, Sequential
+from tqdm import tqdm
 
 if TYPE_CHECKING:
     from torch.nn import Module  # used only for typing
@@ -134,7 +135,7 @@ def train(  # noqa : PLR0913, PLR0915
             len_heavy_raw,
             len_light_raw,
             *other_labels_raw,
-        ) in train_loader:
+        ) in tqdm(train_loader):
             embedding = embedding_raw.to(device)
             main_labels = main_labels_raw.to(device)
             len_heavy = len_heavy_raw.to(device)
