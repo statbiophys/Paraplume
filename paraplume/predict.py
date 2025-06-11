@@ -145,6 +145,8 @@ def test( # noqa : PLR0913, PLR0915
             preds_bin = (pdb_to_concat["prediction"] >= THRESHOLD).astype(int).tolist()
 
             labs = pdb_to_concat["labels"].tolist()
+            if len(set(labs)) == 1:
+                continue
             ap = average_precision_score(labs, preds)
             roc = roc_auc_score(labs, preds)
             mcc = matthews_corrcoef(labs, preds_bin)

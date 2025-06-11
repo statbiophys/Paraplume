@@ -85,7 +85,7 @@ def train(  # noqa : PLR0913, PLR0915
     n_epochs: int = 3,
     mask_prob: float = 0,
     patience: int = 0,
-    gpu: int = 1,
+    gpu: int = 0,
 ):
     """Train model given parameters.
 
@@ -318,7 +318,7 @@ def main( # noqa : PLR0913, PLR0915
             Models should be in 'ablang2','igbert','igT5','esm','antiberty',prot-t5','all'. \
             Default to 'all'.",
     ),
-    gpu: int = typer.Option(1, "--gpu", help="Which GPU to use."),
+    gpu: int = typer.Option(0, "--gpu", help="Which GPU to use."),
 ) -> None:
     """Train the model given provided parameters and data."""
     if (result_folder / Path("summary_dict.json")).exists() and not override:
