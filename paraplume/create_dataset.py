@@ -18,7 +18,7 @@ from antiberty import AntiBERTyRunner
 from tqdm import tqdm
 from transformers import BertModel, BertTokenizer, T5EncoderModel, T5Tokenizer
 
-from paraplume.utils import build_dictionary, get_logger
+from paraplume.utils import build_dictionary, get_logger, get_device
 
 app = typer.Typer(add_completion=False)
 log = get_logger()
@@ -286,7 +286,7 @@ def compute_esm_embeddings(
     -------
         torch.Tensor: ESM embeddings.
     """
-    device = torch.device(f"cuda:{gpu}" if torch.cuda.is_available() else "cpu")
+    device = get_device(gpu)
 
     esm_model, esm_alphabet = esm.pretrained.esm2_t33_650M_UR50D()
     esm_model = esm_model.to(device)  # Move model to GPU
@@ -331,7 +331,7 @@ def compute_igbert_embeddings(
     """
     if single_chain:
         sequence_emb = sequence_heavy_emb
-        device = torch.device(f"cuda:{gpu}" if torch.cuda.is_available() else "cpu")
+        device = get_device(gpu)
         sequences = [" ".join(seq) for seq in sequence_emb]
         bert_tokeniser = BertTokenizer.from_pretrained(
             "Exscientia/IgBert_unpaired", do_lower_case=False
@@ -356,7 +356,7 @@ def compute_igbert_embeddings(
             )
             bert_residue_embeddings = output.last_hidden_state
         return bert_residue_embeddings.cpu()
-    device = torch.device(f"cuda:{gpu}" if torch.cuda.is_available() else "cpu")
+    device = get_device(gpu)
     paired_sequences = []
     for seq_heavy, seq_light in zip(sequence_heavy_emb, sequence_light_emb, strict=False):
         paired_sequences.append(" ".join(seq_heavy) + " [SEP] " + " ".join(seq_light))
@@ -397,7 +397,7 @@ def compute_igt5_embeddings(
     """
     if single_chain:
         sequence_emb = sequence_heavy_emb
-        device = torch.device(f"cuda:{gpu}" if torch.cuda.is_available() else "cpu")
+        device = get_device(gpu)
         sequences = [" ".join(seq) for seq in sequence_emb]
         igt5_tokeniser = T5Tokenizer.from_pretrained(
             "Exscientia/IgT5_unpaired", do_lower_case=False
@@ -420,7 +420,7 @@ def compute_igt5_embeddings(
             )
             igt5_residue_embeddings = output.last_hidden_state
         return igt5_residue_embeddings.cpu()  # Move back to CPU
-    device = torch.device(f"cuda:{gpu}" if torch.cuda.is_available() else "cpu")
+    device = get_device(gpu)
     paired_sequences = []
     for seq_heavy, seq_light in zip(sequence_heavy_emb, sequence_light_emb, strict=False):
         paired_sequences.append(" ".join(seq_heavy) + " </s> " + " ".join(seq_light))
@@ -454,7 +454,7 @@ def compute_t5_embeddings(
     -------
         torch.Tensor: Prot-T5 embeddings.
     """
-    device = torch.device(f"cuda:{gpu}" if torch.cuda.is_available() else "cpu")
+    device = get_device(gpu)
     prot_t5_tokenizer = T5Tokenizer.from_pretrained(
         "Rostlab/prot_t5_xl_half_uniref50-enc", do_lower_case=False
     )

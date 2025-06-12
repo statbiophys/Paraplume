@@ -417,6 +417,13 @@ def get_embedding(
         emb_list.append(embedding[ran_aa][:, ran_embpos])
     return torch.cat(emb_list, dim=1)
 
+def get_device(gpu=0):
+    if torch.cuda.is_available():
+        if gpu < torch.cuda.device_count() and gpu>=0:
+            return torch.device(f"cuda:{gpu}")
+        else:
+            print(f"Warning: GPU index {gpu} not available. Falling back to CPU.")
+    return torch.device("cpu")
 
 log = get_logger()
 

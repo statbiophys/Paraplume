@@ -11,7 +11,8 @@ import typer
 from torch.nn import Dropout, Linear, ReLU, Sequential, Sigmoid
 
 from paraplume.create_dataset import get_llm_to_embedding_dict
-from paraplume.utils import get_logger
+from paraplume.utils import get_logger, get_device
+from codecarbon import EmissionsTracker
 
 app = typer.Typer(add_completion=False)
 warnings.filterwarnings("ignore")
@@ -88,7 +89,7 @@ def file_to_paratope(  # noqa: PLR0913
     single_chain: bool = typer.Option(  # noqa: FBT001
         False,  # noqa: FBT003
         "--single-chain",
-        help="Chain to use for single chain model. Defaults to heavy.",
+        help="Infer paratope on single chain data. Default to False.",
     ),
     large: bool = typer.Option(  # noqa: FBT001
         True,  # noqa: FBT003
@@ -98,6 +99,8 @@ def file_to_paratope(  # noqa: PLR0913
 ) -> pd.DataFrame:
     """Predict paratope from sequence."""
     df = pd.read_csv(file_path)
+    tracker = EmissionsTracker(project_name="ParatopePrediction", experiment_id=f"Size_{len(df)}_{str(large)}_gpu{gpu}")
+    tracker.start()
     predict_paratope(
         df,
         custom_model=custom_model,
@@ -109,6 +112,7 @@ def file_to_paratope(  # noqa: PLR0913
     )
     result_path = file_path.parents[0] / Path(f"{name}" + file_path.stem)
     df.to_pickle(result_path.with_suffix(".pkl"))
+    tracker.stop()
     return df
 
 
@@ -178,7 +182,7 @@ def predict_paratope( # noqa: PLR0913,PLR0915
     log.info("Loading model.", path=model_path.as_posix())
     model.load_state_dict(torch.load(model_path, weights_only=True))
     model.eval()
-    device = torch.device(f"cuda:{gpu}" if torch.cuda.is_available() else "cpu")
+    device = get_device(gpu)
     model = model.to(device)
 
     llm_models = summary_dict["embedding_models"]
@@ -279,7 +283,7 @@ def seq_to_paratope(  # noqa: PLR0913
     single_chain: bool = typer.Option(  # noqa: FBT001
         False,  # noqa: FBT003
         "--single-chain",
-        help="Chain to use for single chain model. Defaults to heavy.",
+        help="Infer paratope on single chain data. Default to False.",
     ),
     no_logs: bool = typer.Option(  # noqa: FBT001
         False,  # noqa: FBT003
@@ -340,7 +344,7 @@ def seq_to_paratope(  # noqa: PLR0913
         )
         embeddings_processed_list.append(emb_processed)
     embeddings_processed = torch.cat(embeddings_processed_list, dim=-1)
-    device = torch.device(f"cuda:{gpu}" if torch.cuda.is_available() else "cpu")
+    device = get_device(gpu)
     model = model.to(device)
     embeddings_processed = embeddings_processed.to(device)
     output = model(embeddings_processed).cpu().detach().numpy().flatten()
