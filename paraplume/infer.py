@@ -53,68 +53,84 @@ def process_embedding(llm: str, emb: torch.Tensor, heavy: int, light: int) -> to
     ran_aa = embedding_coords_aa[llm]
     return emb[ran_aa, :]
 
+def predict_paratope_seq(  # noqa: PLR0913
+    sequence_heavy: str ="",
+    sequence_light: str ="",
+    custom_model: Path | None = None,
+    gpu: int = 0,
+    large: bool = True,
+    single_chain: bool = False,
+) -> tuple:
+    """Predict paratope given two sequence chains.
 
-@app.command()
-def file_to_paratope(  # noqa: PLR0913
-    file_path: Path = typer.Argument(  # noqa: B008
-        ...,
-        help="Path of the file.",
-        show_default=False,
-    ),
-    custom_model: Path
-    | None = typer.Option(  # noqa: B008
-        None,
-        "--custom-model",
-        help="Custom trained model folder path to do inference. Needs to contain the same files \
-            as paraplume/trained_models/large which is the output of a paraplume.train ",
-    ),
-    name: str = typer.Option(
-        "paratope_",
-        "--name",
-        help="Prefix to add to the file.",
-    ),
-    gpu: int = typer.Option(0, "--gpu", help="Which GPU to use."),
-    emb_proc_size: int = typer.Option(
-        100,
-        "--emb-proc-size",
-        help="We create embeddings batch by batch to avoid memory explosion. This is the batch\
-            size. Optimal value depends on your computer. Defaults to 100.",
-    ),
-    compute_sequence_embeddings: bool = typer.Option(  # noqa: FBT001
-        False,  # noqa: FBT003
-        "--compute-sequence-embeddings",
-        help="Compute paratope and classical sequence embeddings for each sequence and llm.\
-            Only possible when using the default trained_models/large.",
-    ),
-    single_chain: bool = typer.Option(  # noqa: FBT001
-        False,  # noqa: FBT003
-        "--single-chain",
-        help="Infer paratope on single chain data. Default to False.",
-    ),
-    large: bool = typer.Option(  # noqa: FBT001
-        True,  # noqa: FBT003
-        "--large/--small",
-        help="Use default Paraplume or the smallest version using only ESM-2 embeddings.",
-    ),
-) -> pd.DataFrame:
-    """Predict paratope from sequence."""
-    df = pd.read_csv(file_path)
-    tracker = EmissionsTracker(project_name="ParatopePrediction", experiment_id=f"Size_{len(df)}_{str(large)}_gpu{gpu}")
-    tracker.start()
-    predict_paratope(
-        df,
-        custom_model=custom_model,
-        gpu=gpu,
-        emb_proc_size=emb_proc_size,
-        compute_sequence_embeddings=compute_sequence_embeddings,
+    Args:
+        sequence_heavy (str | None, optional): Heavy chain sequence. Defaults to None.
+        sequence_light (str | None, optional): Light chain sequence. Defaults to None.
+        custom_model (Path | None, optional): Use custom model folder. Defaults to None.
+        gpu (int, optional): Gpu to use. Defaults to 0.
+        large (bool, optional): Use model trained on 6 embeddings. Defaults to True.
+        single_chain (bool, optional): Compute embeddings using LLMs trained on single chains.\
+            Defaults to False.
+    Returns:
+        tuple: _description_
+    """
+    if not custom_model:
+        subfolder = "large" if large else "small"
+        with resources.as_file(
+            resources.files("paraplume.trained_models") / subfolder
+        ) as model_path:
+            custom_model = model_path
+    summary_dict_path = custom_model / Path("summary_dict.json")
+    with summary_dict_path.open(encoding="utf-8") as f:
+        summary_dict = json.load(f)
+
+    layers = []
+    input_size = int(summary_dict["input_size"])
+    dims = [int(each) for each in summary_dict["dims"].split(",")]
+    dropouts = [0] * len(dims)
+    for i, _ in enumerate(dims):
+        if i == 0:
+            layers.append(Linear(input_size, dims[i]))
+            layers.append(Dropout(dropouts[i]))
+            layers.append(ReLU())
+        else:
+            layers.append(Linear(dims[i - 1], dims[i]))
+            layers.append(Dropout(dropouts[i]))
+            layers.append(ReLU())
+    model = Sequential(Sequential(*layers), Sequential(Linear(dims[-1], 1), Sigmoid()))
+    model_path = custom_model / Path("checkpoint.pt")
+    model.load_state_dict(torch.load(model_path, weights_only=True))
+    model.eval()
+
+    llm_models = summary_dict["embedding_models"]
+    if llm_models == "all":
+        llm_models = "ablang2,igbert,igT5,esm,antiberty,prot-t5"
+    llm_list = llm_models.split(",")
+    llm_to_embedding_dict = get_llm_to_embedding_dict(
+        [sequence_heavy],
+        [sequence_light],
+        emb_proc_size=1,
+        llm_list=llm_list,
         single_chain=single_chain,
-        large=large,
+        gpu=gpu,
     )
-    result_path = file_path.parents[0] / Path(f"{name}" + file_path.stem)
-    df.to_pickle(result_path.with_suffix(".pkl"))
-    tracker.stop()
-    return df
-
+    heavy, light = len(sequence_heavy), len(sequence_light)
+    embeddings_processed_list = []
+    for llm, emb in llm_to_embedding_dict.items():
+        emb_sequence = emb[0]
+        emb_processed = process_embedding(
+            llm=llm,
+            emb=emb_sequence,
+            heavy=heavy,
+            light=light,
+        )
+        embeddings_processed_list.append(emb_processed)
+    embeddings_processed = torch.cat(embeddings_processed_list, dim=-1)
+    device = get_device(gpu)
+    model = model.to(device)
+    embeddings_processed = embeddings_processed.to(device)
+    output = model(embeddings_processed).cpu().detach().numpy().flatten().tolist()
+    return output[:heavy], output[heavy : heavy + light]
 
 def predict_paratope( # noqa: PLR0913,PLR0915
     df:pd.DataFrame,
@@ -254,6 +270,67 @@ def predict_paratope( # noqa: PLR0913,PLR0915
     df["model_prediction_light"] = light_outputs
     return df
 
+@app.command()
+def file_to_paratope(  # noqa: PLR0913
+    file_path: Path = typer.Argument(  # noqa: B008
+        ...,
+        help="Path of the file.",
+        show_default=False,
+    ),
+    custom_model: Path
+    | None = typer.Option(  # noqa: B008
+        None,
+        "--custom-model",
+        help="Custom trained model folder path to do inference. Needs to contain the same files \
+            as paraplume/trained_models/large which is the output of a paraplume.train ",
+    ),
+    name: str = typer.Option(
+        "paratope_",
+        "--name",
+        help="Prefix to add to the file.",
+    ),
+    gpu: int = typer.Option(0, "--gpu", help="Which GPU to use."),
+    emb_proc_size: int = typer.Option(
+        100,
+        "--emb-proc-size",
+        help="We create embeddings batch by batch to avoid memory explosion. This is the batch\
+            size. Optimal value depends on your computer. Defaults to 100.",
+    ),
+    compute_sequence_embeddings: bool = typer.Option(  # noqa: FBT001
+        False,  # noqa: FBT003
+        "--compute-sequence-embeddings",
+        help="Compute paratope and classical sequence embeddings for each sequence and llm.\
+            Only possible when using the default trained_models/large.",
+    ),
+    single_chain: bool = typer.Option(  # noqa: FBT001
+        False,  # noqa: FBT003
+        "--single-chain",
+        help="Infer paratope on single chain data. Default to False.",
+    ),
+    large: bool = typer.Option(  # noqa: FBT001
+        True,  # noqa: FBT003
+        "--large/--small",
+        help="Use default Paraplume or the smallest version using only ESM-2 embeddings.",
+    ),
+) -> pd.DataFrame:
+    """Predict paratope from sequence."""
+    df = pd.read_csv(file_path)
+    tracker = EmissionsTracker(project_name="ParatopePrediction", experiment_id=f"Size_{len(df)}_{str(large)}_gpu{gpu}")
+    tracker.start()
+    predict_paratope(
+        df,
+        custom_model=custom_model,
+        gpu=gpu,
+        emb_proc_size=emb_proc_size,
+        compute_sequence_embeddings=compute_sequence_embeddings,
+        single_chain=single_chain,
+        large=large,
+    )
+    result_path = file_path.parents[0] / Path(f"{name}" + file_path.stem)
+    df.to_pickle(result_path.with_suffix(".pkl"))
+    tracker.stop()
+    return df
+
 
 @app.command()
 def seq_to_paratope(  # noqa: PLR0913
@@ -285,84 +362,26 @@ def seq_to_paratope(  # noqa: PLR0913
         "--single-chain",
         help="Infer paratope on single chain data. Default to False.",
     ),
-    no_logs: bool = typer.Option(  # noqa: FBT001
-        False,  # noqa: FBT003
-        "--no-logs",
-        help="Don't show logs",
-    ),
 ) -> None:
     """Predict paratope from sequence."""
-    if not custom_model:
-        subfolder = "large" if large else "small"
-        with resources.as_file(
-            resources.files("paraplume.trained_models") / subfolder
-        ) as model_path:
-            custom_model = model_path
-    summary_dict_path = custom_model / Path("summary_dict.json")
-    with summary_dict_path.open(encoding="utf-8") as f:
-        summary_dict = json.load(f)
-
-    layers = []
-    input_size = int(summary_dict["input_size"])
-    dims = [int(each) for each in summary_dict["dims"].split(",")]
-    dropouts = [0] * len(dims)
-    for i, _ in enumerate(dims):
-        if i == 0:
-            layers.append(Linear(input_size, dims[i]))
-            layers.append(Dropout(dropouts[i]))
-            layers.append(ReLU())
-        else:
-            layers.append(Linear(dims[i - 1], dims[i]))
-            layers.append(Dropout(dropouts[i]))
-            layers.append(ReLU())
-    model = Sequential(Sequential(*layers), Sequential(Linear(dims[-1], 1), Sigmoid()))
-    model_path = custom_model / Path("checkpoint.pt")
-    model.load_state_dict(torch.load(model_path, weights_only=True))
-    model.eval()
-
-    llm_models = summary_dict["embedding_models"]
-    if llm_models == "all":
-        llm_models = "ablang2,igbert,igT5,esm,antiberty,prot-t5"
-    llm_list = llm_models.split(",")
-    llm_to_embedding_dict = get_llm_to_embedding_dict(
-        [sequence_heavy],
-        [sequence_light],
-        emb_proc_size=1,
-        llm_list=llm_list,
-        single_chain=single_chain,
-        gpu=gpu,
-    )
-    heavy, light = len(sequence_heavy), len(sequence_light)
-    embeddings_processed_list = []
-    for llm, emb in llm_to_embedding_dict.items():
-        emb_sequence = emb[0]
-        emb_processed = process_embedding(
-            llm=llm,
-            emb=emb_sequence,
-            heavy=heavy,
-            light=light,
-        )
-        embeddings_processed_list.append(emb_processed)
-    embeddings_processed = torch.cat(embeddings_processed_list, dim=-1)
-    device = get_device(gpu)
-    model = model.to(device)
-    embeddings_processed = embeddings_processed.to(device)
-    output = model(embeddings_processed).cpu().detach().numpy().flatten()
-    if no_logs:
-        return (output[:heavy], output[heavy : heavy + light])
-    print("===== Heavy Chain =====")
-    print(f"{'AA':<4}  {'Probability':>10}")
-    print("-" * 20)
-    for aa, prob in zip(sequence_heavy, output[:heavy], strict=False):
-        print(f"{aa:<4}  --> {np.round(float(prob), 3):>8.3f}")
-
-    print("\n===== Light Chain =====")
-    print(f"{'AA':<4}  {'Probability':>10}")
-    print("-" * 20)
-    for aa, prob in zip(sequence_light, output[heavy : heavy + light], strict=False):
-        print(f"{aa:<4}  --> {np.round(float(prob), 3):>8.3f}")
-    return (output[:heavy], output[heavy : heavy + light])
-
+    output_heavy, output_light = predict_paratope_seq(sequence_heavy=sequence_heavy,
+                                                    sequence_light=sequence_light,
+                                                    custom_model=custom_model,
+                                                    gpu=gpu,
+                                                    large=large,
+                                                    single_chain=single_chain)
+    if output_heavy:
+        print("===== Heavy Chain =====")
+        print(f"{'AA':<4}  {'Probability':>10}")
+        print("-" * 20)
+        for aa, prob in zip(sequence_heavy, output_heavy, strict=False):
+            print(f"{aa:<4}  --> {np.round(float(prob), 3):>8.3f}")
+    if output_light:
+        print("\n===== Light Chain =====")
+        print(f"{'AA':<4}  {'Probability':>10}")
+        print("-" * 20)
+        for aa, prob in zip(sequence_light, output_light, strict=False):
+            print(f"{aa:<4}  --> {np.round(float(prob), 3):>8.3f}")
 
 if __name__ == "__main__":
     app()
