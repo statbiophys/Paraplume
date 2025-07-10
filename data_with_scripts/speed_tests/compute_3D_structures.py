@@ -1,11 +1,14 @@
 from pathlib import Path
+
+import typer
 from abodybuilder3.lightning_module import LitABB3
 from abodybuilder3.utils import add_atom37_to_output, output_to_pdb, string_to_input
-import typer
+
 app = typer.Typer(add_completion=False)
 import pandas as pd
 import torch
 from codecarbon import EmissionsTracker
+
 
 @app.command()
 def paragraph(
@@ -24,13 +27,13 @@ def paragraph(
     else:
         map_location=torch.device('cpu')
         module=LitABB3.load_from_checkpoint("/home/athenes/old_gitlab/abodybuilder3_old/output/plddt-loss/best_second_stage_saved.ckpt", map_location=map_location)
-    device = torch.device(f"cuda:0" if torch.cuda.is_available() and gpu else "cpu")
+    device = torch.device("cuda:0" if torch.cuda.is_available() and gpu else "cpu")
     print(device)
     model = module.model
     model=model.to(device)
     df = pd.read_csv(file_path)
     Path(f"/home/athenes/Paraplume/data_with_scripts/speed_tests/pdbs_size{len(df)}").mkdir(exist_ok=True)
-    tracker = EmissionsTracker(project_name="ABB3_prediction_gpu", experiment_id=f"Size_{len(df)}_{str(gpu)}")
+    tracker = EmissionsTracker(project_name="ABB3_prediction_gpu", experiment_id=f"Size_{len(df)}_{gpu!s}")
     tracker.start()
     for i, (heavy, light) in enumerate(df[["sequence_heavy","sequence_light"]].values):
         ab_input = string_to_input(heavy=heavy, light=light)
