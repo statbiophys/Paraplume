@@ -1,0 +1,16 @@
+ModelType,Seed,Size,TimeTaken(s)
+Small,0,1,15
+Small,0,10,14
+Small,0,100,16
+Small,0,1000,48
+Small,0,10000,399
+Large,0,1,20
+Large,0,10,20
+Large,0,100,38
+Large,0,1000,183
+Large,0,10000,1668
+ABB3,0,1,11
+ABB3,0,10,24
+ABB3,0,100,166
+ABB3,0,1000,1556
+ABB3,0,10000,16164

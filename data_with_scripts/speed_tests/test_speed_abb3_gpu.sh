@@ -1,11 +1,11 @@
 #!/bin/bash
 
 # Output file for timing and RAM usage
-output_file="timing_results_abb3_gpu_10000.txt"
+output_file="timing_results_abb3_gpu.txt"
 echo "ModelType,Seed,Size,TimeTaken(s)" > $output_file
 
 for seed in 0; do
-    for size in 10000; do
+    for size in 1 10 100 1000 10000; do
         echo "ABB3, Seed $seed, Size $size..."
         start_time=$(date +%s)
         python /home/athenes/Paraplume/data_with_scripts/speed_tests/compute_3D_structures.py /home/athenes/Paraplume/data_with_scripts/speed_tests/test$size.csv --gpu

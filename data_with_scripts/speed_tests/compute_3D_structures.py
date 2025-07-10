@@ -4,7 +4,6 @@ from abodybuilder3.utils import add_atom37_to_output, output_to_pdb, string_to_i
 import typer
 app = typer.Typer(add_completion=False)
 import pandas as pd
-module = LitABB3.load_from_checkpoint("/home/athenes/old_gitlab/abodybuilder3_old/output/plddt-loss/best_second_stage_saved.ckpt")
 import torch
 from codecarbon import EmissionsTracker
 
@@ -20,7 +19,13 @@ def paragraph(
         "--gpu",
     ),
     ):
+    if gpu:
+        module = LitABB3.load_from_checkpoint("/home/athenes/old_gitlab/abodybuilder3_old/output/plddt-loss/best_second_stage_saved.ckpt")
+    else:
+        map_location=torch.device('cpu')
+        module=LitABB3.load_from_checkpoint("/home/athenes/old_gitlab/abodybuilder3_old/output/plddt-loss/best_second_stage_saved.ckpt", map_location=map_location)
     device = torch.device(f"cuda:0" if torch.cuda.is_available() and gpu else "cpu")
+    print(device)
     model = module.model
     model=model.to(device)
     df = pd.read_csv(file_path)

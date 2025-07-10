@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# Output file for timing and RAM usage
+# Output file for timing
 output_file="timing_results_paraplume_cpu.txt"
 echo "ModelType,Seed,Size,TimeTaken(s)" > $output_file
 
 for seed in 0; do
-    for size in 1 10 100 1000; do
+    for size in 1 10 100 1000 10000; do
         echo "Small model, Seed $seed, Size $size..."
         start_time=$(date +%s)
         python /home/athenes/Paraplume/paraplume/infer.py file-to-paratope \
@@ -17,7 +17,7 @@ for seed in 0; do
         echo "Small,$seed,$size,$duration" >> $output_file
     done
 
-    for size in 1 10 100 1000; do
+    for size in 1 10 100 1000 10000; do
         echo "Large model, Seed $seed, Size $size..."
         start_time=$(date +%s)
         python /home/athenes/Paraplume/paraplume/infer.py file-to-paratope \
