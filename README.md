@@ -1,5 +1,5 @@
 <h1 align="center">
-  <img src="doc/logo.png width="300">
+  <img src="doc/logo.png" width="300">
 </h1>
 
 **Paraplume** is a sequence-based paratope prediction method. It predicts which amino acids in an antibody sequence are likely to interact with an antigen during binding.
