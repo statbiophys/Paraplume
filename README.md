@@ -63,8 +63,6 @@ infer-paratope [OPTIONS] COMMAND [ARGS]...
 ### Global Options
 - `--help` - Show help message and exit
 
----
-
 <details>
 <summary><h2>📋 Commands</h2></summary>
 
