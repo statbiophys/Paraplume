@@ -8,7 +8,9 @@
   <img src="doc/example_github.png" width="500">
 </h1>
 
----
+<div style="text-align:center; margin:20px 0;">
+  <span style="font-size:20px; color:#666;">◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆</span>
+</div>
 
 <details>
 <summary><h1>📖 How it works</h1></summary>
@@ -30,7 +32,9 @@ The full workflow of Paraplume is summarized Figure B below:
 
 </details>
 
----
+<div style="text-align:center; margin:20px 0;">
+  <span style="font-size:20px; color:#666;">◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆</span>
+</div>
 
 <details>
 <summary><h1>⚙️ Installation</h1></summary>
@@ -45,7 +49,9 @@ We recommend installing it in a virtual environment with python >= 3.10.
 
 </details>
 
----
+<div style="text-align:center; margin:20px 0;">
+  <span style="font-size:20px; color:#666;">◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆</span>
+</div>
 
 <details>
 <summary><h1>💻 Command Line Documentation</h1></summary>
@@ -208,7 +214,9 @@ print(predictions.head())
 
 </details>
 
----
+<div style="text-align:center; margin:20px 0;">
+  <span style="font-size:20px; color:#666;">◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆</span>
+</div>
 
 <details>
 <summary><h1>🐍 Python Tutorial</h1></summary>
@@ -217,7 +225,9 @@ A python tutorial is available in the `tutorial` folder.
 
 </details>
 
----
+<div style="text-align:center; margin:20px 0;">
+  <span style="font-size:20px; color:#666;">◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆</span>
+</div>
 
 ## Quick Start
 
