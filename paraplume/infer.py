@@ -8,11 +8,11 @@ import numpy as np
 import pandas as pd
 import torch
 import typer
+from codecarbon import EmissionsTracker
 from torch.nn import Dropout, Linear, ReLU, Sequential, Sigmoid
 
 from paraplume.create_dataset import get_llm_to_embedding_dict
-from paraplume.utils import get_logger, get_device
-from codecarbon import EmissionsTracker
+from paraplume.utils import get_device, get_logger
 
 app = typer.Typer(add_completion=False)
 warnings.filterwarnings("ignore")
@@ -71,7 +71,9 @@ def predict_paratope_seq(  # noqa: PLR0913
         large (bool, optional): Use model trained on 6 embeddings. Defaults to True.
         single_chain (bool, optional): Compute embeddings using LLMs trained on single chains.\
             Defaults to False.
-    Returns:
+
+    Returns
+    -------
         tuple: _description_
     """
     if not custom_model:
@@ -274,7 +276,7 @@ def predict_paratope( # noqa: PLR0913,PLR0915
 def file_to_paratope(  # noqa: PLR0913
     file_path: Path = typer.Argument(  # noqa: B008
         ...,
-        help="Path of the file.",
+        help="Path of the csv file.",
         show_default=False,
     ),
     custom_model: Path
@@ -315,7 +317,7 @@ def file_to_paratope(  # noqa: PLR0913
 ) -> pd.DataFrame:
     """Predict paratope from sequence."""
     df = pd.read_csv(file_path)
-    tracker = EmissionsTracker(project_name="ParatopePrediction", experiment_id=f"Size_{len(df)}_{str(large)}_gpu{gpu}")
+    tracker = EmissionsTracker(project_name="ParatopePrediction", experiment_id=f"Size_{len(df)}_{large!s}_gpu{gpu}")
     tracker.start()
     predict_paratope(
         df,
@@ -333,23 +335,29 @@ def file_to_paratope(  # noqa: PLR0913
 
 
 @app.command()
-def seq_to_paratope(  # noqa: PLR0913
-    sequence_heavy: str = typer.Argument(
-        ...,
-        help="Path of csv file to use for pdb list.",
+def seq_to_paratope(
+    sequence_heavy: str  = typer.Option(
+       "",
+        "--heavy-chain",
+        "-h",
+        help="Heavy chain amino acid sequence.",
         show_default=False,
     ),
-    sequence_light: str = typer.Argument(
-        ...,
-        help="Path of csv file to use for pdb list.",
+    sequence_light: str= typer.Option(
+        "",
+        "--light-chain",
+        "-l",
+        help="Light chain amino acid sequence.",
         show_default=False,
     ),
     custom_model: Path
     | None = typer.Option(  # noqa: B008
         None,
         "--custom-model",
-        help="Custom trained model folder path to do inference. Needs to contain the same files \
-            as paraplume/trained_models/large which is the output of a paraplume.train ",
+        help=(
+            "Custom trained model folder path to do inference. Needs to contain the same files "
+            "as paraplume/trained_models/large which is the output of a training phase."
+            )
     ),
     gpu: int = typer.Option(0, "--gpu", help="Which GPU to use."),
     large: bool = typer.Option(  # noqa: FBT001
@@ -357,13 +365,9 @@ def seq_to_paratope(  # noqa: PLR0913
         "--large/--small",
         help="Use default Paraplume or the smallest version using only ESM-2 embeddings.",
     ),
-    single_chain: bool = typer.Option(  # noqa: FBT001
-        False,  # noqa: FBT003
-        "--single-chain",
-        help="Infer paratope on single chain data. Default to False.",
-    ),
 ) -> None:
     """Predict paratope from sequence."""
+    single_chain=(sequence_heavy is None) or (sequence_light is None)
     output_heavy, output_light = predict_paratope_seq(sequence_heavy=sequence_heavy,
                                                     sequence_light=sequence_light,
                                                     custom_model=custom_model,

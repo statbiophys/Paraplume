@@ -41,7 +41,8 @@ classifiers=[
             'Programming Language :: Python :: 3.10',
             'Programming Language :: Python :: 3.11',
             'Programming Language :: Python :: 3.12']
-
+[project.scripts]
+infer-paratope='paraplume.infer:app'
 [dependency-groups]
 dev = [
     "ruff>=0.9.2",
