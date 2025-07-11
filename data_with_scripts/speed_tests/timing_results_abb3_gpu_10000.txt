@@ -1,2 +1,0 @@
-ModelType,Seed,Size,TimeTaken(s)
-ABB3,0,10000,15941

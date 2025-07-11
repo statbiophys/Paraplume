@@ -1,3 +1,0 @@
-ModelType,Seed,Size,TimeTaken(s)
-Small,0,10000,2655
-Large,0,10000,12829
