@@ -3,13 +3,15 @@
 </h1>
 
 **Paraplume** is a sequence-based paratope prediction method. It predicts which amino acids in an antibody sequence are likely to interact with an antigen during binding. Concretely, given an amino acid sequence, the model returns a **probability for each residue** indicating the likelihood of antigen interaction.
+
 <h1 align="center">
   <img src="doc/example_github.png" width="500">
 </h1>
 
 ---
 
-# How it works
+<details>
+<summary><h1>📖 How it works</h1></summary>
 
 Paraplume uses supervised learning and involves three main steps:
 
@@ -26,14 +28,27 @@ The full workflow of Paraplume is summarized Figure B below:
 
 ![Summary](./doc/figure1.png)
 
----
-# Installation
-It is available on PyPI and can be installed through pip.
-`pip install paraplume`
-We recommand to install it in a virtual environment with python >= 3.10.
+</details>
 
 ---
-# Command Line Documentation
+
+<details>
+<summary><h1>⚙️ Installation</h1></summary>
+
+It is available on PyPI and can be installed through pip.
+
+```bash
+pip install paraplume
+```
+
+We recommend installing it in a virtual environment with python >= 3.10.
+
+</details>
+
+---
+
+<details>
+<summary><h1>💻 Command Line Documentation</h1></summary>
 
 A command-line tool for predicting paratopes from antibody sequences.
 
@@ -47,9 +62,11 @@ infer-paratope [OPTIONS] COMMAND [ARGS]...
 
 ---
 
-## Commands
+<details>
+<summary><h2>📋 Commands</h2></summary>
 
-### 1. `seq-to-paratope` - Predict from Raw Sequences
+<details>
+<summary><h3>1. seq-to-paratope - Predict from Raw Sequences</h3></summary>
 
 Predict paratope directly from amino acid sequences provided as command line arguments.
 
@@ -67,7 +84,8 @@ infer-paratope seq-to-paratope [OPTIONS]
 | `--gpu` | INT | 0 | GPU device to use |
 | `--large/--small` | flag | --large | Model size (large: full Paraplume, small: ESM-2 only) |
 
-#### Examples
+<details>
+<summary><h4>Examples</h4></summary>
 
 **Both chains:**
 ```bash
@@ -88,9 +106,12 @@ infer-paratope seq-to-paratope \
   -l EIVLTQSPTTMAASPGEKITITCSARSSISSNYLHWYQQKPGFSPKLLIYRTSNLASGVPSRFSGSGSGTSYSLTIGTMEAEDVATYYCHQGSNLPFTFGSGTKLEIK
 ```
 
----
+</details>
 
-### 2. `file-to-paratope` - Predict from File
+</details>
+
+<details>
+<summary><h3>2. file-to-paratope - Predict from File</h3></summary>
 
 Predict paratope from sequences stored in a CSV file.
 
@@ -115,7 +136,8 @@ infer-paratope file-to-paratope [OPTIONS] FILE_PATH
 | `--single-chain` | flag | False | Process single chain sequences |
 | `--large/--small` | flag | --large | Model size (large: Paraplume, small: Paraplume-S, using ESM-2 embedding only) |
 
-#### Input File Format
+<details>
+<summary><h4>Input File Format</h4></summary>
 
 Your CSV file must contain these columns:
 
@@ -137,7 +159,10 @@ Your CSV file must contain these columns:
 | | EIVLTQSPTTMAASPGEKITITCSARSSISSNYLHWYQQKPGFSPKLLIYRTSNLASGVPSRFSGSGSGTSYSLTIGTMEAEDVATYYCHQGSNLPFTFGSGTKLEIK |
 | | DIQMTQSPSSLSASVGDRVTITCRASQGISSWLAWYQQKPGKAPKLLIYDASSLESGVPSRFSGSGSGTDFTLTISSLQPEDFATYYCQQYGSSPPYTFGQGTKLEIK |
 
-#### Examples
+</details>
+
+<details>
+<summary><h4>Examples</h4></summary>
 
 **Paired chains:**
 ```bash
@@ -159,7 +184,10 @@ Sample input files are available in `tests/data/`:
 - `test_heavy.csv` - Heavy chain only
 - `test_light.csv` - Light chain only
 
-#### Output
+</details>
+
+<details>
+<summary><h4>Output</h4></summary>
 
 Creates a pickle file (e.g., `paratope_test.pkl`) containing:
 - `model_prediction_heavy` - Paratope predictions for heavy chains
@@ -172,6 +200,29 @@ predictions = pd.read_pickle("paratope_test.pkl")
 print(predictions.head())
 ```
 
+</details>
+
+</details>
+
+</details>
+
+</details>
+
 ---
-# Python tutorial
+
+<details>
+<summary><h1>🐍 Python Tutorial</h1></summary>
+
 A python tutorial is available in the `tutorial` folder.
+
+</details>
+
+---
+
+## Quick Start
+
+1. **Install**: `pip install paraplume`
+2. **Single sequence**: `infer-paratope seq-to-paratope -h YOUR_HEAVY_CHAIN -l YOUR_LIGHT_CHAIN`
+3. **File batch**: `infer-paratope file-to-paratope your_file.csv`
+
+For detailed usage, expand the sections above! 👆
