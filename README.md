@@ -1,4 +1,6 @@
-# Paraplume
+<h1 align="center">
+  <img src="docs/logo.svg" width="300">
+</h1>
 
 **Paraplume** is a sequence-based paratope prediction method. It predicts which amino acids in an antibody sequence are likely to interact with an antigen during binding.
 
@@ -13,13 +15,13 @@ Example:
 
 Paraplume uses supervised learning and involves three main steps:
 
-1. **Labelling**
+1. **Labelling**:
    Antibody sequences are annotated with paratope labels using structural data from [SAbDab](http://opig.stats.ox.ac.uk/webapps/newsabdab/).
 
-2. **Sequence representation**
+2. **Sequence representation**:
    Each amino acid is embedded into a high-dimensional vector using **Protein Language Model (PLM) embeddings**.
 
-3. **Model training**
+3. **Model training**:
    A **Multi-Layer Perceptron (MLP)** is trained to minimize **Binary Cross-Entropy Loss**, using PLM embeddings as inputs and paratope labels as targets.
 
 ---
