@@ -8,12 +8,11 @@
   <img src="doc/example_github.png" width="500">
 </h1>
 
-<div style="text-align:center; margin:20px 0;">
-  <span style="font-size:20px; color:#666;">◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆</span>
-</div>
+<hr style="height:3px;border:none;background-color:#ff6b6b;" />
+
 
 <details>
-<summary><h1>📖 How it works</h1></summary>
+<summary><h1>📖 HOW IT WORKS</h1></summary>
 
 Paraplume uses supervised learning and involves three main steps:
 
@@ -32,12 +31,11 @@ The full workflow of Paraplume is summarized Figure B below:
 
 </details>
 
-<div style="text-align:center; margin:20px 0;">
-  <span style="font-size:20px; color:#666;">◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆</span>
-</div>
+<hr style="height:3px;border:none;background-color:#ff6b6b;" />
+
 
 <details>
-<summary><h1>⚙️ Installation</h1></summary>
+<summary><h1>⚙️ INSTALLATION</h1></summary>
 
 It is available on PyPI and can be installed through pip.
 
@@ -49,12 +47,11 @@ We recommend installing it in a virtual environment with python >= 3.10.
 
 </details>
 
-<div style="text-align:center; margin:20px 0;">
-  <span style="font-size:20px; color:#666;">◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆</span>
-</div>
+<hr style="height:3px;border:none;background-color:#ff6b6b;" />
+
 
 <details>
-<summary><h1>💻 Command Line Documentation</h1></summary>
+<summary><h1>💻 COMMAND LINE DOCUMENTATION </h1></summary>
 
 A command-line tool for predicting paratopes from antibody sequences.
 
@@ -214,22 +211,20 @@ print(predictions.head())
 
 </details>
 
-<div style="text-align:center; margin:20px 0;">
-  <span style="font-size:20px; color:#666;">◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆</span>
-</div>
+<hr style="height:3px;border:none;background-color:#ff6b6b;" />
+
 
 <details>
-<summary><h1>🐍 Python Tutorial</h1></summary>
+<summary><h1>🐍 PYTHON TUTORIAL</h1></summary>
 
 A python tutorial is available in the `tutorial` folder.
 
 </details>
 
-<div style="text-align:center; margin:20px 0;">
-  <span style="font-size:20px; color:#666;">◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆ ◆</span>
-</div>
+<hr style="height:3px;border:none;background-color:#ff6b6b;" />
 
-## Quick Start
+
+# ⚡ QUICK START
 
 1. **Install**: `pip install paraplume`
 2. **Single sequence**: `infer-paratope seq-to-paratope -h YOUR_HEAVY_CHAIN -l YOUR_LIGHT_CHAIN`
