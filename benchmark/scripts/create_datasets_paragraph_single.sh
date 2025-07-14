@@ -1,2 +1,0 @@
-python paraplume/create_dataset.py /home/athenes/Paraplume/datasets/paragraph/test_set_heavy.csv -r /home/athenes/Paraplume/benchmark/paragraph --pdb-folder-path /home/athenes/all_structures/imgt_renumbered_expanded --single-chain
-python paraplume/create_dataset.py /home/athenes/Paraplume/datasets/paragraph/test_set_light.csv -r /home/athenes/Paraplume/benchmark/paragraph --pdb-folder-path /home/athenes/all_structures/imgt_renumbered_expanded --single-chain

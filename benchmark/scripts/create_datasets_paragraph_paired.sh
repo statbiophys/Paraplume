@@ -1,3 +1,0 @@
-python paraplume/create_dataset.py /home/athenes/Paraplume/datasets/paragraph/train_set.csv -r /home/athenes/Paraplume/benchmark/paragraph --pdb-folder-path /home/athenes/all_structures/imgt_renumbered_expanded
-python paraplume/create_dataset.py /home/athenes/Paraplume/datasets/paragraph/val_set.csv -r /home/athenes/Paraplume/benchmark/paragraph --pdb-folder-path /home/athenes/all_structures/imgt_renumbered_expanded
-python paraplume/create_dataset.py /home/athenes/Paraplume/datasets/paragraph/test_set.csv -r /home/athenes/Paraplume/benchmark/paragraph --pdb-folder-path /home/athenes/all_structures/imgt_renumbered_expanded

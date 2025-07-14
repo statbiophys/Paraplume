@@ -1,2 +1,0 @@
-python paraplume/create_dataset.py /home/athenes/Paraplume/datasets/mipe/test_set_heavy.csv -r /home/athenes/Paraplume/benchmark/mipe --pdb-folder-path /home/athenes/all_structures/imgt_renumbered_mipe --single-chain
-python paraplume/create_dataset.py /home/athenes/Paraplume/datasets/mipe/test_set_light.csv -r /home/athenes/Paraplume/benchmark/mipe --pdb-folder-path /home/athenes/all_structures/imgt_renumbered_mipe --single-chain
