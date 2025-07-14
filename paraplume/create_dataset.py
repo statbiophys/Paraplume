@@ -18,7 +18,7 @@ from antiberty import AntiBERTyRunner
 from tqdm import tqdm
 from transformers import BertModel, BertTokenizer, T5EncoderModel, T5Tokenizer
 
-from paraplume.utils import build_dictionary, get_logger, get_device
+from paraplume.utils import build_dictionary, get_device, get_logger
 
 app = typer.Typer(add_completion=False)
 log = get_logger()

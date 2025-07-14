@@ -20,6 +20,7 @@ from sklearn.metrics import (
 )
 from tqdm import tqdm
 
+
 def rec_dd():
     """Return nested default_dict.
 
@@ -416,12 +417,20 @@ def get_embedding(
         emb_list.append(embedding[ran_aa][:, ran_embpos])
     return torch.cat(emb_list, dim=1)
 
-def get_device(gpu=0):
+def get_device(gpu:int=0)-> torch.device:
+    """Return gpu device on 'gpu' if cuda is available, otherwise return cpu device.
+
+    Args:
+        gpu (int, optional): Name of GPU. Defaults to 0.
+
+    Returns
+    -------
+        torch.device: Gpu or cpu pytorch device.
+    """
     if torch.cuda.is_available():
         if gpu < torch.cuda.device_count() and gpu>=0:
             return torch.device(f"cuda:{gpu}")
-        else:
-            print(f"Warning: GPU index {gpu} not available. Falling back to CPU.")
+        print(f"Warning: GPU index {gpu} not available. Falling back to CPU.")
     return torch.device("cpu")
 
 log = get_logger()
