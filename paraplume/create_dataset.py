@@ -37,9 +37,12 @@ def get_llm_to_embedding_dict( # noqa: PLR0913
     """Get dictionary mapping llm to the embedding of the sequences.
 
     Args:
-        sequence_heavy_emb (List): Heavy sequences
-        sequence_light_emb (List): Light sequences
+        sequence_heavy (List): Heavy sequences
+        sequence_light (List): Light sequences
         emb_proc_size (int): Batch size to create embeddings without memory explosion.
+        llm_list (list): List of names of LLMs to use.
+        gpu (int): Name of gpu to use.
+        single_chain (bool): Single chain mode.
 
     Returns
     -------
@@ -82,6 +85,8 @@ def create_embeddings_from_dict(
             sequence.
         save_path (Path): Path where to save embeddings.
         emb_proc_size (int): Batch size to create embeddings without memory explosion.
+        gpu (int): Gpu to use.
+        single_chain (bool): Single chain mode.
 
 
     Returns
@@ -113,6 +118,8 @@ def create_emebddings_from_seq(
         sequence_heavy_emb (List): Heavy sequences
         sequence_light_emb (List): Light sequences
         emb_proc_size (int): Batch size to create embeddings without memory explosion.
+        gpu (int): Gpu to use.
+        single_chain (bool): Single chain mode.
 
     Returns
     -------
@@ -197,6 +204,8 @@ def process_batch( # noqa: PLR0913
         heavy_sequences (List): List of heavy sequences.
         light_sequences (List): List of light sequences.
         emb_proc_size (int): Size of the batch.
+        gpu (int): Gpu to use.
+        single_chain (bool): Single chain mode.
 
     Returns
     -------
@@ -222,6 +231,8 @@ def compute_antiberty_embeddings(
     Args:
         sequence_heavy_emb (List): Heavy sequences.
         sequence_light_emb (List): Light sequences.
+        gpu (int): Gpu to use.
+        single_chain (bool): Single chain mode.
 
     Returns
     -------
@@ -252,6 +263,8 @@ def compute_ablang_embeddings(
     Args:
         sequence_heavy_emb (List): Heavy sequences.
         sequence_light_emb (List): Light sequences.
+        gpu (int): Gpu to use.
+        single_chain (bool): Single chain mode.
 
     Returns
     -------
@@ -281,6 +294,8 @@ def compute_esm_embeddings(
     Args:
         sequence_heavy_emb (List): Heavy sequences.
         sequence_light_emb (List): Light sequences.
+        gpu (int): Gpu to use.
+        single_chain (bool): Single chain mode.
 
     Returns
     -------
@@ -323,7 +338,10 @@ def compute_igbert_embeddings(
     """Compute igbert embeddings.
 
     Args:
-        paired_sequences (List): Paired sequences of heavy and light chains.
+        sequence_heavy_emb (List): Heavy sequences.
+        sequence_light_emb (List): Light sequences.
+        gpu (int): Gpu to use.
+        single_chain (bool): Single chain mode.
 
     Returns
     -------
@@ -389,7 +407,10 @@ def compute_igt5_embeddings(
     """Compute igt5 embeddings.
 
     Args:
-        paired_sequences (List): Paired sequences of heavy and light chains.
+        sequence_heavy_emb (List): Heavy sequences.
+        sequence_light_emb (List): Light sequences.
+        gpu (int): Gpu to use.
+        single_chain (bool): Single chain mode.
 
     Returns
     -------
@@ -449,6 +470,8 @@ def compute_t5_embeddings(
     Args:
         sequence_heavy_emb (List): Heavy sequences.
         sequence_light_emb (List): Light sequences.
+        gpu (int): Gpu to use.
+        single_chain (bool): Single chain mode.
 
     Returns
     -------

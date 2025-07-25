@@ -8,7 +8,6 @@ import numpy as np
 import pandas as pd
 import torch
 import typer
-from codecarbon import EmissionsTracker
 from torch.nn import Dropout, Linear, ReLU, Sequential, Sigmoid
 
 from paraplume.create_dataset import get_llm_to_embedding_dict
@@ -30,11 +29,11 @@ LLM_DIM_DICT = {
 }
 
 def process_embedding(llm: str, emb: torch.Tensor, heavy: int, light: int) -> torch.Tensor:
-    """Return tensor of embedding given lengths of heavy and light chains and embeddings to use.
+    """Return unpadded tensor of the llm's embedding given lengths of heavy and light chains.
 
     Args:
-        embedding (torch.Tensor): Total embedding in which to do selection.
-        embedding_models (List[str]): List of embeddings to use.
+        llm (str): LLM to use.
+        emb (torch.Tensor): Padded embedding for this llm.
         heavy (int): Heavy chain length.
         light (int): Light chain length.
 
@@ -58,6 +57,7 @@ def predict_paratope_seq(  # noqa: PLR0913
     sequence_light: str ="",
     custom_model: Path | None = None,
     gpu: int = 0,
+    *,
     large: bool = True,
     single_chain: bool = False,
 ) -> tuple:
@@ -317,8 +317,6 @@ def file_to_paratope(  # noqa: PLR0913
 ) -> pd.DataFrame:
     """Predict paratope from sequence."""
     df = pd.read_csv(file_path)
-    tracker = EmissionsTracker(project_name="ParatopePrediction", experiment_id=f"Size_{len(df)}_{large!s}_gpu{gpu}")
-    tracker.start()
     predict_paratope(
         df,
         custom_model=custom_model,
@@ -330,14 +328,13 @@ def file_to_paratope(  # noqa: PLR0913
     )
     result_path = file_path.parents[0] / Path(f"{name}" + file_path.stem)
     df.to_pickle(result_path.with_suffix(".pkl"))
-    tracker.stop()
     return df
 
 
 @app.command()
 def seq_to_paratope(
     sequence_heavy: str  = typer.Option(
-       "",
+        "",
         "--heavy-chain",
         "-h",
         help="Heavy chain amino acid sequence.",

@@ -101,6 +101,8 @@ def train(  # noqa : PLR0913, PLR0915
         n_epochs (int, optional): _description_. Defaults to 3.
         criterion (_type_, optional): _description_. Defaults to nn.BCELoss().
         mask_prob (float, optional): _description_. Defaults to 0.
+        patience (int): Number of epochs after which we stop training.
+        Gpu (int): Gpu to use.
 
     Raises
     ------
