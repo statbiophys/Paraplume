@@ -51,23 +51,23 @@ We recommend installing it in a virtual environment with python >= 3.10.
 
 
 <details>
-<summary><h1>💻 COMMAND LINE DOCUMENTATION </h1></summary>
+<summary><h1>💻 COMMAND LINE INFERENCE </h1></summary>
 
 A command-line tool for predicting paratopes from antibody sequences.
 
 ### Basic Usage
 ```bash
-infer-paratope [OPTIONS] COMMAND [ARGS]...
+infer-paratope [OPTIONS] COMMAND [COMMAND OPTIONS][COMMAND ARGS] ...
 ```
 
 ### Global Options
-- `--help` - Show help message and exit
+`--help` Show help message and exit
 
 <details>
 <summary><h2>📋 Commands</h2></summary>
 
 <details>
-<summary><h3>1. seq-to-paratope - Predict from Raw Sequences</h3></summary>
+<summary><h3>1. seq-to-paratope - Predict from sequence</h3></summary>
 
 Predict paratope directly from amino acid sequences provided as command line arguments.
 

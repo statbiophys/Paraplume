@@ -530,8 +530,8 @@ def main( # noqa: PLR0913
     emb_proc_size: int = typer.Option(
         100,
         "--emb-proc-size",
-        help="We create embeddings batch by batch to avoid memory explosion. This is the batch\
-            size. Optimal value depends on your computer. Defaults to 100.",
+        help=("We create embeddings chunk by chunk to avoid memory explosion. "
+        "This is the chunk size. Optimal value depends on your computer.")
     ),
     gpu: int = typer.Option(
         0,
@@ -540,8 +540,8 @@ def main( # noqa: PLR0913
     single_chain: bool = typer.Option( # noqa: FBT001
         False, # noqa: FBT003
         "--single-chain",
-        help="Generate emebddings using llms on single chain mode, which slightly increases \
-            performance. Default to False.",
+        help=("Generate emebddings using llms on single chain mode, which slightly increases"
+            "performance. Default to False."),
     ),
 ) -> None:
     """Create dataset to train the neural network.

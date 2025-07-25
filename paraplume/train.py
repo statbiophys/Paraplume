@@ -287,16 +287,21 @@ def main( # noqa : PLR0913, PLR0915
     positive_weight: float = typer.Option(
         1, "--pos-weight", help="Weight to give to positive labels."
     ),
-    batch_size: int = typer.Option(10, "--batch-size", "-bs", help="Batch size. Defaults to 10."),
+    batch_size: int = typer.Option(10, "--batch-size", "-bs", help="Batch size."),
     mask_prob: float = typer.Option(
         0,
         "--mask-prob",
-        help="Probability with which to mask each embedding coefficient. \
-            Defaults to 0",
+        help="Probability with which to mask each embedding coefficient.",
     ),
-    dropouts: str = typer.Option("0", "--dropouts", help="Dropout probability. Defaults to 0."),
+    dropouts: str = typer.Option(
+        "0",
+        "--dropouts",
+        help="Dropout probabilities for each hidden layer, separated by commas. Example '0.3,0.3'."
+    ),
     dims: str = typer.Option(
-        "1000", "--dims", help="Dimension of hidden layers. Separated by commas."
+        "1000",
+        "--dims",
+        help="Dimensions of hidden layers. Separated by commas. Example '100,100'",
     ),
     override: bool = typer.Option(False, "--override", help="Override results. Defaults to False"), # noqa : FBT001, FBT003
     seed: int = typer.Option(0, "--seed", help="Seed to use for training."),
@@ -304,21 +309,19 @@ def main( # noqa : PLR0913, PLR0915
     alphas: str = typer.Option(
         "-",
         "--alphas",
-        help="Whether to use different alphas labels to help main label. \
-        Defaults to empty.",
+        help="Whether to use different alphas labels to help main label.",
     ),
     patience: int = typer.Option(
         0,
         "--patience",
-        help="Patience to use for early stopping. 0 means no early stopping. \
-        Defaults to 0.",
+        help="Patience to use for early stopping. 0 means no early stopping.",
     ),
     embedding_models: str = typer.Option(
         "all",
         "--emb-models",
-        help="Embedding models to use, separated by commas. \
-            Models should be in 'ablang2','igbert','igT5','esm','antiberty',prot-t5','all'. \
-            Default to 'all'.",
+        help=("LLM embedding models to use, separated by commas. "
+            "LLMs should be in 'ablang2','igbert','igT5','esm','antiberty',prot-t5','all'. "
+            "Example 'igT5,esm'."),
     ),
     gpu: int = typer.Option(0, "--gpu", help="Which GPU to use."),
 ) -> None:
