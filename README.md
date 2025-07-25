@@ -238,7 +238,7 @@ Create dataset to train the neural network. Sequences and labels are saved in a 
 
 #### Usage
 ```bash
-create-training-data [OPTIONS] CSV_FILE_PATH
+create-training-data [OPTIONS] CSV_FILE_PATH PDB_FOLDER_PATH
 ```
 
 #### Arguments
@@ -345,7 +345,7 @@ Here's a complete example of training a custom model:
 
 ```bash
 # Step 1: Create training data from CSV
-create-training-data data/my_sequences.csv -r my_training_results --gpu 0
+create-training-data data/my_sequences.csv pdb_folder -r my_training_results --gpu 0
 
 # Step 2: Train the model
 train-model my_training_results/train my_training_results/val \
