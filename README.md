@@ -221,6 +221,151 @@ A python tutorial is available in the `tutorial` folder.
 
 <hr style="height:3px;border:none;background-color:#ff6b6b;" />
 
+<details>
+<summary><h1>🦮 COMMAND LINE TRAINING</h1></summary>
+
+We also provide the possibility to use your custom model for inference. After training the model, the model is saved in a folder whose path can be given to the inference commands as a `--custom-model` option.
+
+To train your custom model you will need to run two commands: `create-training-data` to generate labels and PLM embeddings, and `train-model` to train the model.
+
+<details>
+<summary><h2>📁 Commands</h2></summary>
+
+<details>
+<summary><h3>1. create-training-data - Generate Training Dataset</h3></summary>
+
+Create dataset to train the neural network. Sequences and labels are saved in a .json file, and LPLM embeddings are saved in a .pt file.
+
+#### Usage
+```bash
+create-training-data [OPTIONS] CSV_FILE_PATH
+```
+
+#### Arguments
+| Argument | Type | Required | Description |
+|----------|------|----------|-------------|
+| `CSV_FILE_PATH` | PATH | ✓ | Path of csv file to use for pdb list |
+| `PDB_FOLDER_PATH` | PATH | ✓ | Pdb folder path for ground truth labeling |
+
+#### Options
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `--result-folder, -r` | PATH | result | Where to save results |
+| `--emb-proc-size` | INTEGER | 100 | We create embeddings chunk by chunk to avoid memory explosion. This is the chunk size. Optimal value depends on your computer |
+| `--gpu` | INTEGER | 0 | Which gpu to use |
+| `--single-chain` | flag | False | Generate embeddings using llms on single chain mode, which slightly increases performance |
+
+<details>
+<summary><h4>Examples</h4></summary>
+
+**Basic usage:**
+```bash
+create-training-data data/training_sequences.csv pdb_folder
+```
+
+**With custom settings:**
+```bash
+create-training-data data/training_sequences.csv pdb_folder \
+  -r results/training_data \
+  --gpu 0 \
+  --emb-proc-size 50 \
+  --single-chain
+```
+
+</details>
+
+</details>
+
+<details>
+<summary><h3>2. train-model - Train Neural Network</h3></summary>
+
+Train the model given provided parameters and data.
+
+#### Usage
+```bash
+train-model [OPTIONS] TRAIN_FOLDER_PATH VAL_FOLDER_PATH
+```
+
+#### Arguments
+| Argument | Type | Required | Description |
+|----------|------|----------|-------------|
+| `TRAIN_FOLDER_PATH` | PATH | ✓ | Path of train folder |
+| `VAL_FOLDER_PATH` | PATH | ✓ | Path of val folder |
+
+#### Options
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `--lr` | FLOAT | 0.001 | Learning rate to use for training |
+| `--n_epochs, -n` | INTEGER | 1 | Number of epochs to use for training |
+| `--result_folder, -r` | PATH | result | Where to save results |
+| `--pos-weight` | FLOAT | 1 | Weight to give to positive labels |
+| `--batch-size, -bs` | INTEGER | 10 | Batch size |
+| `--mask-prob` | FLOAT | 0 | Probability with which to mask each embedding coefficient |
+| `--dropouts` | TEXT | 0 | Dropout probabilities for each hidden layer, separated by commas. Example '0.3,0.3' |
+| `--dims` | TEXT | 1000 | Dimensions of hidden layers. Separated by commas. Example '100,100' |
+| `--override` | flag | False | Override results |
+| `--seed` | INTEGER | 0 | Seed to use for training |
+| `--l2-pen` | FLOAT | 0 | L2 penalty to use for the model weights |
+| `--alphas` | TEXT | - | Whether to use different alphas labels to help main label |
+| `--patience` | INTEGER | 0 | Patience to use for early stopping. 0 means no early stopping |
+| `--emb-models` | TEXT | all | LLM embedding models to use, separated by commas. LLMs should be in 'ablang2','igbert','igT5','esm','antiberty','prot-t5','all'. Example 'igT5,esm' |
+| `--gpu` | INTEGER | 0 | Which GPU to use |
+
+<details>
+<summary><h4>Examples</h4></summary>
+
+**Basic training:**
+```bash
+train-model results/training_data/train results/training_data/val
+```
+
+**Advanced training with custom parameters:**
+```bash
+train-model results/training_data/train results/training_data/val \
+  --lr 0.001 \
+  -n 50 \
+  --batch-size 32 \
+  --dims 512,256 \
+  --dropouts 0.2,0.1 \
+  --patience 5 \
+  --emb-models igT5,esm \
+  --gpu 0
+```
+
+</details>
+
+</details>
+
+</details>
+
+<details>
+<summary><h2>🚀 Complete Training Workflow</h2></summary>
+
+Here's a complete example of training a custom model:
+
+```bash
+# Step 1: Create training data from CSV
+create-training-data data/my_sequences.csv -r my_training_results --gpu 0
+
+# Step 2: Train the model
+train-model my_training_results/train my_training_results/val \
+  --lr 0.001 \
+  -n 50 \
+  --batch-size 32 \
+  --dims 512,256 \
+  --dropouts 0.2,0.1 \
+  --patience 5 \
+  --emb-models igT5,esm \
+  --gpu 0
+```
+
+After training, your custom model will be saved in the results folder and can be used with inference commands using the `--custom-model` option.
+
+</details>
+
+</details>
+
+<hr style="height:3px;border:none;background-color:#ff6b6b;" />
 
 # ⚡ QUICK START
 
