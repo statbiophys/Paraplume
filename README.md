@@ -55,7 +55,6 @@ We recommend installing it in a virtual environment with python >= 3.10.
 
 A command-line tool for predicting paratopes from antibody sequences.
 `infer-paratope` provides two commands, one to infer the paratope from a unique sequence (`seq-to-paratope`) and another from a batch of sequences in the form of a csv file (`file-to-paratope`).
-#### Basic usage
 ```bash
 infer-paratope COMMAND [OPTIONS][ARGS] ...
 ```
@@ -135,30 +134,7 @@ infer-paratope file-to-paratope [OPTIONS] FILE_PATH
 | `--single-chain` | flag | False | Process single chain sequences |
 | `--large/--small` | flag | --large | Model size (large: Paraplume, small: Paraplume-S, using ESM-2 embedding only) |
 
-<details>
-<summary><h4>Input File Format</h4></summary>
 
-Your CSV file must contain these columns:
-
-**For paired chains (default):**
-| sequence_heavy | sequence_light |
-|----------------|----------------|
-| QAYLQQSGAELVKPGASVKMSCKASDYTFTNYNMHWIKQTPGQGLEWIGAIYPGNGDTSYNQKFKGKATLTADKSSSTAYMQLSSLTSEDSAVYYCASLGSSYFDYWGQGTTLTVSS | EIVLTQSPTTMAASPGEKITITCSARSSISSNYLHWYQQKPGFSPKLLIYRTSNLASGVPSRFSGSGSGTSYSLTIGTMEAEDVATYYCHQGSNLPFTFGSGTKLEIK |
-| EVQLVESGGGLVQPGGSLRLSCAASGFTFSRYAMSWVRQAPGKGLEWVSVISSGGSYTYYADSVKGRFTISRDNAKNSLYLQMNSLRAEDTAVYYCAKDREYRYYYYGMDVWGQGTTVTVSS | DIQMTQSPSSLSASVGDRVTITCRASQGISSWLAWYQQKPGKAPKLLIYDASSLESGVPSRFSGSGSGTDFTLTISSLQPEDFATYYCQQYGSSPPYTFGQGTKLEIK |
-
-**For single heavy chain (use `--single-chain`):**
-| sequence_heavy | sequence_light |
-|----------------|----------------|
-| QAYLQQSGAELVKPGASVKMSCKASDYTFTNYNMHWIKQTPGQGLEWIGAIYPGNGDTSYNQKFKGKATLTADKSSSTAYMQLSSLTSEDSAVYYCASLGSSYFDYWGQGTTLTVSS | |
-| EVQLVESGGGLVQPGGSLRLSCAASGFTFSRYAMSWVRQAPGKGLEWVSVISSGGSYTYYADSVKGRFTISRDNAKNSLYLQMNSLRAEDTAVYYCAKDREYRYYYYGMDVWGQGTTVTVSS | |
-
-**For single light chain (use `--single-chain`):**
-| sequence_heavy | sequence_light |
-|----------------|----------------|
-| | EIVLTQSPTTMAASPGEKITITCSARSSISSNYLHWYQQKPGFSPKLLIYRTSNLASGVPSRFSGSGSGTSYSLTIGTMEAEDVATYYCHQGSNLPFTFGSGTKLEIK |
-| | DIQMTQSPSSLSASVGDRVTITCRASQGISSWLAWYQQKPGKAPKLLIYDASSLESGVPSRFSGSGSGTDFTLTISSLQPEDFATYYCQQYGSSPPYTFGQGTKLEIK |
-
-</details>
 
 <details>
 <summary><h4>Examples</h4></summary>
@@ -182,6 +158,31 @@ Sample input files are available in `tests/data/`:
 - `test.csv` - Paired heavy/light chains
 - `test_heavy.csv` - Heavy chain only
 - `test_light.csv` - Light chain only
+
+</details>
+
+<details>
+<summary><h4>Input</h4></summary>
+
+Your CSV file must contain these columns:
+
+**For paired chains (default):**
+| sequence_heavy | sequence_light |
+|----------------|----------------|
+| QAYLQQSGAELVKPGASVKMSCKASDYTFTNYNMHWIKQTPGQGLEWIGAIYPGNGDTSYNQKFKGKATLTADKSSSTAYMQLSSLTSEDSAVYYCASLGSSYFDYWGQGTTLTVSS | EIVLTQSPTTMAASPGEKITITCSARSSISSNYLHWYQQKPGFSPKLLIYRTSNLASGVPSRFSGSGSGTSYSLTIGTMEAEDVATYYCHQGSNLPFTFGSGTKLEIK |
+| EVQLVESGGGLVQPGGSLRLSCAASGFTFSRYAMSWVRQAPGKGLEWVSVISSGGSYTYYADSVKGRFTISRDNAKNSLYLQMNSLRAEDTAVYYCAKDREYRYYYYGMDVWGQGTTVTVSS | DIQMTQSPSSLSASVGDRVTITCRASQGISSWLAWYQQKPGKAPKLLIYDASSLESGVPSRFSGSGSGTDFTLTISSLQPEDFATYYCQQYGSSPPYTFGQGTKLEIK |
+
+**For single heavy chain (use `--single-chain`):**
+| sequence_heavy | sequence_light |
+|----------------|----------------|
+| QAYLQQSGAELVKPGASVKMSCKASDYTFTNYNMHWIKQTPGQGLEWIGAIYPGNGDTSYNQKFKGKATLTADKSSSTAYMQLSSLTSEDSAVYYCASLGSSYFDYWGQGTTLTVSS | |
+| EVQLVESGGGLVQPGGSLRLSCAASGFTFSRYAMSWVRQAPGKGLEWVSVISSGGSYTYYADSVKGRFTISRDNAKNSLYLQMNSLRAEDTAVYYCAKDREYRYYYYGMDVWGQGTTVTVSS | |
+
+**For single light chain (use `--single-chain`):**
+| sequence_heavy | sequence_light |
+|----------------|----------------|
+| | EIVLTQSPTTMAASPGEKITITCSARSSISSNYLHWYQQKPGFSPKLLIYRTSNLASGVPSRFSGSGSGTSYSLTIGTMEAEDVATYYCHQGSNLPFTFGSGTKLEIK |
+| | DIQMTQSPSSLSASVGDRVTITCRASQGISSWLAWYQQKPGKAPKLLIYDASSLESGVPSRFSGSGSGTDFTLTISSLQPEDFATYYCQQYGSSPPYTFGQGTKLEIK |
 
 </details>
 
@@ -244,7 +245,7 @@ create-training-data [OPTIONS] CSV_FILE_PATH PDB_FOLDER_PATH
 | `--single-chain` | flag | False | Generate embeddings using llms on single chain mode, which slightly increases performance |
 
 <details>
-<summary><h4>Examples</h4></summary>
+<summary><h4>Example</h4></summary>
 
 ```bash
 create-training-data custom_train_set.csv pdb_folder \
@@ -257,7 +258,7 @@ create-training-data custom_train_set.csv pdb_folder \
 </details>
 
 <details>
-<summary><h4>Inputs</h4></summary>
+<summary><h4>Input</h4></summary>
 
 `custom_train_set.csv` contains information about the PDB files used for training and has the following format:
 
@@ -274,7 +275,9 @@ create-training-data custom_train_set.csv pdb_folder \
 - `antigen_chain`: Antigen chain identifier used to label the paratope
 
 </details>
-<summary><h4>Outputs</h4></summary>
+
+</details>
+<summary><h4>Output</h4></summary>
 
 Creates a folder with the same name `custom_train_set` inside `training_data`, in which there are two files, `json.dict` with the sequences and labels, and `embeddings.pt` for the PLM embeddings.
 
@@ -318,7 +321,7 @@ train-model [OPTIONS] TRAIN_FOLDER_PATH VAL_FOLDER_PATH
 | `--gpu` | INTEGER | 0 | Which GPU to use |
 
 <details>
-<summary><h4>Examples</h4></summary>
+<summary><h4>Example</h4></summary>
 
 ```bash
 train-model training_data/custom_train_set training_data/custom_val_set \
@@ -336,13 +339,14 @@ train-model training_data/custom_train_set training_data/custom_val_set \
 </details>
 
 <details>
-<summary><h4>Input folders</h4></summary>
+<summary><h4>Input</h4></summary>
 
-The two arguments (`training_data/custom_train_set` and `training_data/custom_val_set` in the example) are created by the previous `create-dataset` command.
+The two arguments (`training_data/custom_train_set` and `training_data/custom_val_set` in the example) are paths of folders created by the previous `create-dataset` command.
 
 </details>
+</details>
 
-<summary><h4>Output folder</h4></summary>
+<summary><h4>Output</h4></summary>
 
 Model weights and training parameters are saved in a folder (`training_results` in the example, `results` by default).
 
