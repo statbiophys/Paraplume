@@ -217,7 +217,7 @@ We also provide the possibility to use your custom model for inference. To train
 After training the model on your custom dataset, the model is saved in a folder whose path can be given to the inference commands as a `--custom-model` option.
 
 <details>
-<summary><h2>📁 Commands</h2></summary>
+<summary><h2>📋 Commands</h2></summary>
 
 <details>
 <summary><h3>1. create-dataset - Generate Training Dataset</h3></summary>
@@ -246,21 +246,40 @@ create-training-data [OPTIONS] CSV_FILE_PATH PDB_FOLDER_PATH
 <details>
 <summary><h4>Examples</h4></summary>
 
-**Basic usage:**
 ```bash
-create-training-data data/training_sequences.csv pdb_folder
-```
-
-**With custom settings:**
-```bash
-create-training-data data/training_sequences.csv pdb_folder \
-  -r results/training_data \
+create-training-data custom_train_set.csv pdb_folder \
+  -r training_data \
   --gpu 0 \
   --emb-proc-size 50 \
   --single-chain
 ```
 
 </details>
+
+<details>
+<summary><h4>Inputs</h4></summary>
+
+`custom_train_set.csv` contains information about the PDB files used for training and has the following format:
+
+| pdb  | Lchain | Hchain | antigen_chain |
+|------|--------|--------|---------------|
+| 1ahw | D      | E      | F             |
+| 1bj1 | L      | H      | W             |
+| 1ce1 | L      | H      | P             |
+
+**Column descriptions:**
+- `pdb`: PDB code of the antibody-antigen complex (should be available in `pdb_folder` as `pdb_folder/pdb_code.pdb`)
+- `Lchain`: Light chain identifier used to label the paratope
+- `Hchain`: Heavy chain identifier used to label the paratope
+- `antigen_chain`: Antigen chain identifier used to label the paratope
+
+</details>
+<summary><h4>Outputs</h4></summary>
+
+Creates a folder with the same name `custom_train_set` inside `training_data`, in which there are two files, `json.dict` with the sequences and labels, and `embeddings.pt` for the PLM embeddings.
+
+</details>
+
 </details>
 
 <details>
@@ -301,16 +320,11 @@ train-model [OPTIONS] TRAIN_FOLDER_PATH VAL_FOLDER_PATH
 <details>
 <summary><h4>Examples</h4></summary>
 
-**Basic training:**
 ```bash
-train-model results/training_data/train results/training_data/val
-```
-
-**Advanced training with custom parameters:**
-```bash
-train-model results/training_data/train results/training_data/val \
+train-model training_data/custom_train_set training_data/custom_val_set \
   --lr 0.001 \
   -n 50 \
+  -r training_results \
   --batch-size 32 \
   --dims 512,256 \
   --dropouts 0.2,0.1 \
@@ -320,6 +334,23 @@ train-model results/training_data/train results/training_data/val \
 ```
 
 </details>
+
+<details>
+<summary><h4>Input folders</h4></summary>
+
+The two arguments (`training_data/custom_train_set` and `training_data/custom_val_set` in the example) are created by the previous `create-dataset` command.
+
+</details>
+
+<summary><h4>Output folder</h4></summary>
+
+Model weights and training parameters are saved in a folder (`training_results` in the example, `results` by default).
+
+</details>
+
+**The resulting trained model can then be used at inference by passing the output folder path as the --custom-model argument of the inference commands (see inference command lines).**
+
+
 </details>
 </details>
 
@@ -330,18 +361,23 @@ train-model results/training_data/train results/training_data/val \
 
 Here's a complete example of how to train and use your custom model:
 
-# Step 0: Set up
+## Set up
 - Clone repository
 - Make sure you are in `Paraplume`.
 - Download PDB files from [SabDab](https://opig.stats.ox.ac.uk/webapps/sabdab-sabpred/sabdab/about#formats) using IMGT format and save them in `./all_structures/imgt`.
 
-# Step 1: Create training and validation datasets from CSVs
-`create-dataset ./tutorial/custom_train_set.csv ./all_structures/imgt -r custom_folder`
+## Step 1: Create training and validation datasets from CSVs
+```bash
+create-dataset ./tutorial/custom_train_set.csv ./all_structures/imgt -r custom_folder
+```
 The folder `custom_folder` will be created. Inside this folder the folder `custom_train_set` is created in which there are two files, `dict.json` for the sequences and labels, and `embeddings.pt` for the PLM embeddings.
-Repeat for the validation set (used for early stopping): `create-dataset ./tutorial/custom_val_set.csv ./all_structures/imgt -r custom_folder`
+Repeat for the validation set (used for early stopping):
+```bash
+create-dataset ./tutorial/custom_val_set.csv ./all_structures/imgt -r custom_folder
+```
 
 
-# Step 2: Train the model
+## Step 2: Train the model
 ```bash
 train-model ./custom_folder/custom_train_set ./custom_folder/custom_val_set \
   --lr 0.001 \
@@ -357,10 +393,12 @@ train-model ./custom_folder/custom_train_set ./custom_folder/custom_val_set \
 This will save training results in `custom_folder`.
 `checkpoint.pt` contains the weights of the model, `summary_dict.json` contains the parameters used for training, and `summary_plot.png` some plots showing the training process.
 
-# Step 3: Use the trained custom model for inference
+## Step 3: Use the trained custom model for inference
 After training, your custom model will be saved in the results folder and can be used with inference commands using the `--custom-model` option.
 
-`infer-paratope file-to-paratope ./Paraplume/tutorial/paired.csv --custom-model ./custom_folder`
+```bash
+infer-paratope file-to-paratope ./Paraplume/tutorial/paired.csv --custom-model ./custom_folder
+```
 
 And the result is available as `paratope_paired.pkl` !!
 

@@ -43,7 +43,7 @@ classifiers=[
             'Programming Language :: Python :: 3.12']
 [project.scripts]
 infer-paratope='paraplume.infer:app'
-create-training-data='paraplume.create_dataset:app'
+create-dataset='paraplume.create_dataset:app'
 train-model='paraplume.train:app'
 [dependency-groups]
 dev = [

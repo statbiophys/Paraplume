@@ -519,13 +519,13 @@ def main( # noqa: PLR0913
         help="Path of csv file to use for pdb list.",
         show_default=False,
     ),
+    pdb_folder_path: Path = typer.Argument( # noqa: B008
+        ...,
+        help="Pdb path for ground truth labeling.",
+        show_default=False,
+    ),
     result_folder: Path = typer.Option( # noqa: B008
         Path("./result/"), "--result-folder", "-r", help="Where to save results."
-    ),
-    pdb_folder_path: Path = typer.Option( # noqa: B008
-        Path("/home/athenes/all_structures/imgt_renumbered_expanded"),
-        "--pdb-folder-path",
-        help="Pdb path for ground truth labeling.",
     ),
     emb_proc_size: int = typer.Option(
         100,
