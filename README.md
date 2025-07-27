@@ -283,6 +283,9 @@ Creates a folder with the same name `custom_train_set` inside `training_data`, i
 
 </details>
 
+</details>
+
+</details>
 <summary><h3>2. train-model - Train Neural Network</h3></summary>
 
 Train the model given provided parameters and data.
@@ -341,8 +344,8 @@ train-model training_data/custom_train_set training_data/custom_val_set \
 The two arguments (`training_data/custom_train_set` and `training_data/custom_val_set` in the example) are paths of folders created by the previous `create-dataset` command.
 
 </details>
-
 </details>
+
 <summary><h4>Output</h4></summary>
 
 Model weights and training parameters are saved in a folder (`training_results` in the example, `results` by default).
