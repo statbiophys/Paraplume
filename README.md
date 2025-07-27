@@ -283,7 +283,6 @@ Creates a folder with the same name `custom_train_set` inside `training_data`, i
 
 </details>
 
-</details>
 <summary><h3>2. train-model - Train Neural Network</h3></summary>
 
 Train the model given provided parameters and data.
