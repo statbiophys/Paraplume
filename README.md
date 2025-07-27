@@ -227,7 +227,7 @@ Create dataset to train the neural network. Sequences and labels are saved in a 
 
 #### Usage
 ```bash
-create-training-data [OPTIONS] CSV_FILE_PATH PDB_FOLDER_PATH
+create-dataset [OPTIONS] CSV_FILE_PATH PDB_FOLDER_PATH
 ```
 
 #### Arguments
@@ -248,7 +248,7 @@ create-training-data [OPTIONS] CSV_FILE_PATH PDB_FOLDER_PATH
 <summary><h4>Example</h4></summary>
 
 ```bash
-create-training-data custom_train_set.csv pdb_folder \
+create-dataset custom_train_set.csv pdb_folder \
   -r training_data \
   --gpu 0 \
   --emb-proc-size 50 \
@@ -276,7 +276,7 @@ create-training-data custom_train_set.csv pdb_folder \
 
 </details>
 
-</details>
+<details>
 <summary><h4>Output</h4></summary>
 
 Creates a folder with the same name `custom_train_set` inside `training_data`, in which there are two files, `json.dict` with the sequences and labels, and `embeddings.pt` for the PLM embeddings.
@@ -344,8 +344,8 @@ train-model training_data/custom_train_set training_data/custom_val_set \
 The two arguments (`training_data/custom_train_set` and `training_data/custom_val_set` in the example) are paths of folders created by the previous `create-dataset` command.
 
 </details>
-</details>
 
+</details>
 <summary><h4>Output</h4></summary>
 
 Model weights and training parameters are saved in a folder (`training_results` in the example, `results` by default).
@@ -356,6 +356,7 @@ Model weights and training parameters are saved in a folder (`training_results` 
 
 
 </details>
+
 </details>
 
 </details>
