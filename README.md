@@ -54,14 +54,12 @@ We recommend installing it in a virtual environment with python >= 3.10.
 <summary><h1>💻 COMMAND LINE INFERENCE </h1></summary>
 
 A command-line tool for predicting paratopes from antibody sequences.
-
-### Basic Usage
+`infer-paratope` provides two commands, one to infer the paratope from a unique sequence (`seq-to-paratope`) and another from a batch of sequences in the form of a csv file (`file-to-paratope`).
+#### Basic usage
 ```bash
-infer-paratope [OPTIONS] COMMAND [COMMAND OPTIONS][COMMAND ARGS] ...
+infer-paratope COMMAND [OPTIONS][ARGS] ...
 ```
-
-### Global Options
-`--help` Show help message and exit
+Run `infer-paratope --help` to see the commands.
 
 <details>
 <summary><h2>📋 Commands</h2></summary>
@@ -211,28 +209,18 @@ print(predictions.head())
 
 <hr style="height:3px;border:none;background-color:#ff6b6b;" />
 
-
-<details>
-<summary><h1>🐍 PYTHON TUTORIAL</h1></summary>
-
-A python tutorial is available in the `tutorial` folder.
-
-</details>
-
-<hr style="height:3px;border:none;background-color:#ff6b6b;" />
-
 <details>
 <summary><h1>🦮 COMMAND LINE TRAINING</h1></summary>
 
-We also provide the possibility to use your custom model for inference. After training the model, the model is saved in a folder whose path can be given to the inference commands as a `--custom-model` option.
+We also provide the possibility to use your custom model for inference. To train your custom model you will need to run two commands: `create-dataset` to generate labels and PLM embeddings for your desired dataset, and `train-model` to train the model.
 
-To train your custom model you will need to run two commands: `create-training-data` to generate labels and PLM embeddings, and `train-model` to train the model.
+After training the model on your custom dataset, the model is saved in a folder whose path can be given to the inference commands as a `--custom-model` option.
 
 <details>
 <summary><h2>📁 Commands</h2></summary>
 
 <details>
-<summary><h3>1. create-training-data - Generate Training Dataset</h3></summary>
+<summary><h3>1. create-dataset - Generate Training Dataset</h3></summary>
 
 Create dataset to train the neural network. Sequences and labels are saved in a .json file, and LPLM embeddings are saved in a .pt file.
 
@@ -273,7 +261,6 @@ create-training-data data/training_sequences.csv pdb_folder \
 ```
 
 </details>
-
 </details>
 
 <details>
@@ -333,35 +320,57 @@ train-model results/training_data/train results/training_data/val \
 ```
 
 </details>
-
+</details>
 </details>
 
 </details>
-
+<hr style="height:3px;border:none;background-color:#ff6b6b;" />
 <details>
-<summary><h2>🚀 Complete Training Workflow</h2></summary>
+<summary><h1>🚀 TRAINING AND USING YOUR CUSTOM MODEL </h1></summary>
 
-Here's a complete example of training a custom model:
+Here's a complete example of how to train and use your custom model:
 
-```bash
-# Step 1: Create training data from CSV
-create-training-data data/my_sequences.csv pdb_folder -r my_training_results --gpu 0
+# Step 0: Set up
+- Clone repository
+- Make sure you are in `Paraplume`.
+- Download PDB files from [SabDab](https://opig.stats.ox.ac.uk/webapps/sabdab-sabpred/sabdab/about#formats) using IMGT format and save them in `./all_structures/imgt`.
+
+# Step 1: Create training and validation datasets from CSVs
+`create-dataset ./tutorial/custom_train_set.csv ./all_structures/imgt -r custom_folder`
+The folder `custom_folder` will be created. Inside this folder the folder `custom_train_set` is created in which there are two files, `dict.json` for the sequences and labels, and `embeddings.pt` for the PLM embeddings.
+Repeat for the validation set (used for early stopping): `create-dataset ./tutorial/custom_val_set.csv ./all_structures/imgt -r custom_folder`
+
 
 # Step 2: Train the model
-train-model my_training_results/train my_training_results/val \
+```bash
+train-model ./custom_folder/custom_train_set ./custom_folder/custom_val_set \
   --lr 0.001 \
   -n 50 \
-  --batch-size 32 \
+  --batch-size 8 \
   --dims 512,256 \
   --dropouts 0.2,0.1 \
   --patience 5 \
   --emb-models igT5,esm \
-  --gpu 0
+  --gpu 0 \
+  -r ./custom_folder
 ```
+This will save training results in `custom_folder`.
+`checkpoint.pt` contains the weights of the model, `summary_dict.json` contains the parameters used for training, and `summary_plot.png` some plots showing the training process.
 
+# Step 3: Use the trained custom model for inference
 After training, your custom model will be saved in the results folder and can be used with inference commands using the `--custom-model` option.
 
+`infer-paratope file-to-paratope ./Paraplume/tutorial/paired.csv --custom-model ./custom_folder`
+
+And the result is available as `paratope_paired.pkl` !!
+
 </details>
+<hr style="height:3px;border:none;background-color:#ff6b6b;" />
+
+<details>
+<summary><h1>🐍 PYTHON TUTORIAL</h1></summary>
+
+A python tutorial is available in the `tutorial` folder.
 
 </details>
 
