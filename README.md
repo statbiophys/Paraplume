@@ -58,7 +58,7 @@ We provide several commands to use the model as inference with the default weigh
 ```bash
 infer-paratope COMMAND [OPTIONS][ARGS] ...
 ```
-By default the model used is trained using the 'expanded' dataset from the [Paragraph](https://academic.oup.com/bioinformatics/article/39/1/btac732/6825310) paper, that we divided in 1000 sequences for the training set and 85 sequences for the validation and available in `/datasets`.
+By default the model used is trained using the 'expanded' dataset from the [Paragraph](https://academic.oup.com/bioinformatics/article/39/1/btac732/6825310) paper, that we divided in 1000 sequences for the training set and 85 sequences for the validation and available in `./datasets/`.
 
 However we also provide the possibility to use a custom model for inference. To train your custom model you will need to run two commands: `create-dataset` to generate labels and PLM embeddings for your desired training dataset, and `train-model` to train the model.
 
