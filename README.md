@@ -421,3 +421,7 @@ If you want to use to train and use your custom model, follow the command line t
 3. **File batch**: `infer-paratope file-to-paratope your_file.csv`
 
 For detailed usage, expand the sections above! 👆
+
+# 📧 Contact
+
+Any issues or questions should be addressed to us at **gabrielathenes@gmail.com**.
