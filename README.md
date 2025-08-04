@@ -51,20 +51,23 @@ We recommend installing it in a virtual environment with python >= 3.10.
 
 
 <details>
-<summary><h1>💻 COMMAND LINE INFERENCE </h1></summary>
+<summary><h1>💻 COMMAND LINE </h1></summary>
+We provide several commands to use the model as inference with the default weights or retrain the model with a custom dataset.
 
-A command-line tool for predicting paratopes from antibody sequences.
 `infer-paratope` provides two commands, one to infer the paratope from a unique sequence (`seq-to-paratope`) and another from a batch of sequences in the form of a csv file (`file-to-paratope`).
 ```bash
 infer-paratope COMMAND [OPTIONS][ARGS] ...
 ```
-Run `infer-paratope --help` to see the commands.
+By default the model used is trained using the 'expanded' dataset from the [Paragraph](https://academic.oup.com/bioinformatics/article/39/1/btac732/6825310) paper, that we divided in 1000 sequences for the training set and 85 sequences for the validation and available in `/datasets/paragraph_all`.
 
+However we also provide the possibility to use a custom model for inference. To train your custom model you will need to run two commands: `create-dataset` to generate labels and PLM embeddings for your desired training dataset, and `train-model` to train the model.
+
+After training the model on your custom dataset, the model is saved in a folder whose path can be given to the inference commands as a `--custom-model` option.
 <details>
 <summary><h2>📋 Commands</h2></summary>
 
 <details>
-<summary><h3>1. seq-to-paratope - Predict from sequence</h3></summary>
+<summary><h3>1. infer-paratope seq-to-paratope - Predict from sequence</h3></summary>
 
 Predict paratope directly from amino acid sequences provided as command line arguments.
 
@@ -109,7 +112,7 @@ infer-paratope seq-to-paratope \
 </details>
 
 <details>
-<summary><h3>2. file-to-paratope - Predict from File</h3></summary>
+<summary><h3>2. infer-paratope file-to-paratope - Predict from File</h3></summary>
 
 Predict paratope from sequences stored in a CSV file.
 
@@ -204,24 +207,8 @@ print(predictions.head())
 
 </details>
 
-</details>
-
-</details>
-
-<hr style="height:3px;border:none;background-color:#ff6b6b;" />
-
 <details>
-<summary><h1>🦮 COMMAND LINE TRAINING</h1></summary>
-
-We also provide the possibility to use your custom model for inference. To train your custom model you will need to run two commands: `create-dataset` to generate labels and PLM embeddings for your desired dataset, and `train-model` to train the model.
-
-After training the model on your custom dataset, the model is saved in a folder whose path can be given to the inference commands as a `--custom-model` option.
-
-<details>
-<summary><h2>📋 Commands</h2></summary>
-
-<details>
-<summary><h3>1. create-dataset - Generate Training Dataset</h3></summary>
+<summary><h3>3. create-dataset - Generate Training Dataset</h3></summary>
 
 Create dataset to train the neural network. Sequences and labels are saved in a .json file, and LPLM embeddings are saved in a .pt file.
 
@@ -286,7 +273,7 @@ Creates a folder with the same name `custom_train_set` inside `training_data`, i
 </details>
 
 <details>
-<summary><h3>2. train-model - Train Neural Network</h3></summary>
+<summary><h3>4. train-model - Train Neural Network</h3></summary>
 
 Train the model given provided parameters and data.
 
@@ -357,21 +344,29 @@ Model weights and training parameters are saved in a folder (`training_results` 
 
 </details>
 
+
+
 </details>
 
 </details>
+
 <hr style="height:3px;border:none;background-color:#ff6b6b;" />
+
 <details>
-<summary><h1>🚀 TRAINING AND USING YOUR CUSTOM MODEL </h1></summary>
+<summary><h1>🚀 TUTORIALS </h1></summary>
 
-Here's a complete example of how to train and use your custom model:
+<details>
+<summary><h2>Command Line Tutorial</h2></summary>
+If you want to use the default model with the already trained weights, just run `infer-paratope file-to-paratope ./Paraplume/tutorial/paired.csv` and the result will be available as `paratope_paired.pkl` in the same `tutorial` folder.
 
-## Set up
+If you want to train and use your custom model via command line, follow the 4 steps below.
+
+### Step 0: Set up
 - Clone repository
 - Make sure you are in `Paraplume`.
 - Download PDB files from [SabDab](https://opig.stats.ox.ac.uk/webapps/sabdab-sabpred/sabdab/about#formats) using IMGT format and save them in `./all_structures/imgt`.
 
-## Step 1: Create training and validation datasets from CSVs
+### Step 1: Create training and validation datasets from CSVs
 ```bash
 create-dataset ./tutorial/custom_train_set.csv ./all_structures/imgt -r custom_folder
 ```
@@ -381,8 +376,7 @@ Repeat for the validation set (used for early stopping):
 create-dataset ./tutorial/custom_val_set.csv ./all_structures/imgt -r custom_folder
 ```
 
-
-## Step 2: Train the model
+### Step 2: Train the model
 ```bash
 train-model ./custom_folder/custom_train_set ./custom_folder/custom_val_set \
   --lr 0.001 \
@@ -398,26 +392,27 @@ train-model ./custom_folder/custom_train_set ./custom_folder/custom_val_set \
 This will save training results in `custom_folder`.
 `checkpoint.pt` contains the weights of the model, `summary_dict.json` contains the parameters used for training, and `summary_plot.png` some plots showing the training process.
 
-## Step 3: Use the trained custom model for inference
+### Step 3: Use the trained custom model for inference
 After training, your custom model will be saved in the results folder and can be used with inference commands using the `--custom-model` option.
 
 ```bash
 infer-paratope file-to-paratope ./Paraplume/tutorial/paired.csv --custom-model ./custom_folder
 ```
 
-And the result is available as `paratope_paired.pkl` !!
+And the result is available as `paratope_paired.pkl` in the `tutorial` folder !!
 
 </details>
-<hr style="height:3px;border:none;background-color:#ff6b6b;" />
 
 <details>
-<summary><h1>🐍 PYTHON TUTORIAL</h1></summary>
+<summary><h2>Python Tutorial</h2></summary>
 
-A python tutorial is available in the `tutorial` folder.
+A comprehensive Python tutorial for default inference usage (using the already trained weights) with examples is available in the `tutorial` folder.
+
+If you want to use to train and use your custom model, follow the command line tutorial, or use the code available in `paraplume/create_dataset.py` and `paraplume/train.py` (function main in both files). Don't hesitate to contact me if you need help **gabrielathenes@gmail.com**.
 
 </details>
 
-<hr style="height:3px;border:none;background-color:#ff6b6b;" />
+</details>
 
 # ⚡ QUICK START
 
