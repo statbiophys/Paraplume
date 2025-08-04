@@ -67,7 +67,7 @@ After training the model on your custom dataset, the model is saved in a folder 
 <summary><h2>📋 Commands</h2></summary>
 
 <details>
-<summary><h3>1. infer-paratope seq-to-paratope - Predict from sequence</h3></summary>
+<summary><h3>1. infer-paratope seq-to-paratope</h3></summary>
 
 Predict paratope directly from amino acid sequences provided as command line arguments.
 
@@ -112,7 +112,7 @@ infer-paratope seq-to-paratope \
 </details>
 
 <details>
-<summary><h3>2. infer-paratope file-to-paratope - Predict from File</h3></summary>
+<summary><h3>2. infer-paratope file-to-paratope</h3></summary>
 
 Predict paratope from sequences stored in a CSV file.
 
@@ -208,7 +208,7 @@ print(predictions.head())
 </details>
 
 <details>
-<summary><h3>3. create-dataset - Generate Training Dataset</h3></summary>
+<summary><h3>3. create-dataset</h3></summary>
 
 Create dataset to train the neural network. Sequences and labels are saved in a `.json` file, and LPLM embeddings are saved in a `.pt` file.
 
@@ -273,7 +273,7 @@ Creates a folder with the same name `custom_train_set` inside `training_data`, i
 </details>
 
 <details>
-<summary><h3>4. train-model - Train Neural Network</h3></summary>
+<summary><h3>4. train-model</h3></summary>
 
 Train the model given provided parameters and data.
 
