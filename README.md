@@ -210,7 +210,7 @@ print(predictions.head())
 <details>
 <summary><h3>3. create-dataset - Generate Training Dataset</h3></summary>
 
-Create dataset to train the neural network. Sequences and labels are saved in a .json file, and LPLM embeddings are saved in a .pt file.
+Create dataset to train the neural network. Sequences and labels are saved in a `.json` file, and LPLM embeddings are saved in a `.pt` file.
 
 #### Usage
 ```bash
@@ -357,7 +357,8 @@ Model weights and training parameters are saved in a folder (`training_results` 
 
 <details>
 <summary><h2>Command Line Tutorial</h2></summary>
-If you want to use the default model with the already trained weights, just run `infer-paratope file-to-paratope ./Paraplume/tutorial/paired.csv` and the result will be available as `paratope_paired.pkl` in the same `tutorial` folder.
+
+If you want to use the default model with the already trained weights, just run `infer-paratope file-to-paratope ./tutorial/paired.csv` and the result will be available as `paratope_paired.pkl` in the same `tutorial` folder.
 
 If you want to train and use your custom model via command line, follow the 4 steps below.
 
