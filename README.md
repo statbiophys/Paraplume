@@ -355,13 +355,14 @@ Model weights and training parameters are saved in a folder specified by the -r 
 <details>
 <summary><h2>Command Line Tutorial</h2></summary>
 
-If you want to use the default model with the already trained weights, just run `infer-paratope file-to-paratope ./tutorial/paired.csv` and the result will be available as `paratope_paired.pkl` in the same `tutorial` folder.
+If you want to use the default model with the already trained weights, just install the package and run `infer-paratope file-to-paratope ./tutorial/paired.csv` and the result will be available as `paratope_paired.pkl` in the same `tutorial` folder.
 
 If you want to train and use your custom model via command line, follow the 4 steps below.
 
 #### Step 0: Set up
 - Clone repository
 - Make sure you are in `Paraplume`.
+- Install the package in your favorite virtual environment with `pip install paraplume`
 - Download PDB files from [SabDab](https://opig.stats.ox.ac.uk/webapps/sabdab-sabpred/sabdab/about#formats) using IMGT format and save them in `./all_structures/imgt`.
 
 #### Step 1: Create training and validation datasets from CSVs
