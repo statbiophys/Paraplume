@@ -144,23 +144,20 @@ infer-paratope file-to-paratope [OPTIONS] FILE_PATH
 
 **Paired chains:**
 ```bash
-infer-paratope file-to-paratope test.csv
+infer-paratope file-to-paratope ./tutorial/paired.csv
 ```
 
 **Heavy chain only:**
 ```bash
-infer-paratope file-to-paratope test_heavy.csv --single-chain
+infer-paratope file-to-paratope ./tutorial/heavy.csv --single-chain
 ```
 
 **Light chain only:**
 ```bash
-infer-paratope file-to-paratope test_light.csv --single-chain
+infer-paratope file-to-paratope ./tutorial/light.csv --single-chain
 ```
 
-Sample input files are available in `tests/data/`:
-- `test.csv` - Paired heavy/light chains
-- `test_heavy.csv` - Heavy chain only
-- `test_light.csv` - Light chain only
+Sample input files are available in the `tutorial` folder.
 
 </details>
 
@@ -192,14 +189,14 @@ Your CSV file must contain these columns:
 <details>
 <summary><h4>Output</h4></summary>
 
-Creates a pickle file (e.g., `paratope_test.pkl`) containing:
+Creates a pickle file (e.g., `./tutorial/paratope_paired.pkl`) containing:
 - `model_prediction_heavy` - Paratope predictions for heavy chains
 - `model_prediction_light` - Paratope predictions for light chains
 
 **Reading results:**
 ```python
 import pandas as pd
-predictions = pd.read_pickle("paratope_test.pkl")
+predictions = pd.read_pickle("./tutorial/paratope_paired.pkl")
 print(predictions.head())
 ```
 
@@ -235,7 +232,7 @@ create-dataset [OPTIONS] CSV_FILE_PATH PDB_FOLDER_PATH
 <summary><h4>Example</h4></summary>
 
 ```bash
-create-dataset custom_train_set.csv pdb_folder \
+create-dataset ./tutorial/custom_train_set.csv pdb_folder \
   -r training_data \
   --gpu 0 \
   --emb-proc-size 50 \
@@ -335,7 +332,7 @@ The two arguments (`training_data/custom_train_set` and `training_data/custom_va
 <details>
 <summary><h4>Output</h4></summary>
 
-Model weights and training parameters are saved in a folder (`training_results` in the example, `results` by default).
+Model weights and training parameters are saved in a folder specified by the -r option (`training_results` in the example, `results` by default).
 
 </details>
 
@@ -397,7 +394,7 @@ This will save training results in `custom_folder`.
 After training, your custom model will be saved in the results folder and can be used with inference commands using the `--custom-model` option.
 
 ```bash
-infer-paratope file-to-paratope ./Paraplume/tutorial/paired.csv --custom-model ./custom_folder
+infer-paratope file-to-paratope ./tutorial/paired.csv --custom-model ./custom_folder
 ```
 
 And the result is available as `paratope_paired.pkl` in the `tutorial` folder !!
