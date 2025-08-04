@@ -362,12 +362,12 @@ If you want to use the default model with the already trained weights, just run 
 
 If you want to train and use your custom model via command line, follow the 4 steps below.
 
-### Step 0: Set up
+#### Step 0: Set up
 - Clone repository
 - Make sure you are in `Paraplume`.
 - Download PDB files from [SabDab](https://opig.stats.ox.ac.uk/webapps/sabdab-sabpred/sabdab/about#formats) using IMGT format and save them in `./all_structures/imgt`.
 
-### Step 1: Create training and validation datasets from CSVs
+#### Step 1: Create training and validation datasets from CSVs
 ```bash
 create-dataset ./tutorial/custom_train_set.csv ./all_structures/imgt -r custom_folder
 ```
@@ -377,7 +377,7 @@ Repeat for the validation set (used for early stopping):
 create-dataset ./tutorial/custom_val_set.csv ./all_structures/imgt -r custom_folder
 ```
 
-### Step 2: Train the model
+#### Step 2: Train the model
 ```bash
 train-model ./custom_folder/custom_train_set ./custom_folder/custom_val_set \
   --lr 0.001 \
@@ -393,7 +393,7 @@ train-model ./custom_folder/custom_train_set ./custom_folder/custom_val_set \
 This will save training results in `custom_folder`.
 `checkpoint.pt` contains the weights of the model, `summary_dict.json` contains the parameters used for training, and `summary_plot.png` some plots showing the training process.
 
-### Step 3: Use the trained custom model for inference
+#### Step 3: Use the trained custom model for inference
 After training, your custom model will be saved in the results folder and can be used with inference commands using the `--custom-model` option.
 
 ```bash
@@ -414,6 +414,8 @@ If you want to use to train and use your custom model, follow the command line t
 </details>
 
 </details>
+
+<hr style="height:3px;border:none;background-color:#ff6b6b;" />
 
 # ⚡ QUICK START
 
