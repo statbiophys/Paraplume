@@ -76,6 +76,7 @@ def predict_paratope_seq(  # noqa: PLR0913
     -------
         tuple: _description_
     """
+    device = get_device(gpu)
     if not custom_model:
         subfolder = "large" if large else "small"
         with resources.as_file(
@@ -101,7 +102,7 @@ def predict_paratope_seq(  # noqa: PLR0913
             layers.append(ReLU())
     model = Sequential(Sequential(*layers), Sequential(Linear(dims[-1], 1), Sigmoid()))
     model_path = custom_model / Path("checkpoint.pt")
-    model.load_state_dict(torch.load(model_path, weights_only=True))
+    model.load_state_dict(torch.load(model_path, weights_only=True, map_location=device))
     model.eval()
 
     llm_models = summary_dict["embedding_models"]
@@ -128,7 +129,6 @@ def predict_paratope_seq(  # noqa: PLR0913
         )
         embeddings_processed_list.append(emb_processed)
     embeddings_processed = torch.cat(embeddings_processed_list, dim=-1)
-    device = get_device(gpu)
     model = model.to(device)
     embeddings_processed = embeddings_processed.to(device)
     output = model(embeddings_processed).cpu().detach().numpy().flatten().tolist()
@@ -168,6 +168,7 @@ def predict_paratope( # noqa: PLR0913,PLR0915
     -------
         pd.DataFrame: Dataframe with paratope predictions as new columns.
     """
+    device = get_device(gpu)
     if (custom_model or not large) and compute_sequence_embeddings:
         msg = "Sequence embedding computation only possible when using default large trained model."
         raise ValueError(msg)
@@ -198,9 +199,8 @@ def predict_paratope( # noqa: PLR0913,PLR0915
     model = Sequential(Sequential(*layers), Sequential(Linear(dims[-1], 1), Sigmoid()))
     model_path = custom_model / Path("checkpoint.pt")
     log.info("Loading model.", path=model_path.as_posix())
-    model.load_state_dict(torch.load(model_path, weights_only=True))
+    model.load_state_dict(torch.load(model_path, weights_only=True, map_location=device))
     model.eval()
-    device = get_device(gpu)
     model = model.to(device)
 
     llm_models = summary_dict["embedding_models"]
