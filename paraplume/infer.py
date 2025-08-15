@@ -303,7 +303,7 @@ def file_to_paratope(  # noqa: PLR0913
         help="We create embeddings batch by batch to avoid memory explosion. This is the batch"
             "size. Optimal value depends on your computer. Defaults to 100.",
     ),
-    result_path: Path | None = typer.Option(
+    result_path: Path | None = typer.Option( # noqa: B008
         None,
         "--result-folder",
         "-r",
