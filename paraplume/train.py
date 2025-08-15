@@ -283,7 +283,7 @@ def main( # noqa : PLR0913, PLR0915
         1, "--n_epochs", "-n", help="Number of epochs to use for training."
     ),
     result_folder: Path = typer.Option( # noqa : B008
-        Path("./result/"), "--result_folder", "-r", help="Where to save results."
+        Path("./result/"), "--result-folder", "-r", help="Where to save results."
     ),
     positive_weight: float = typer.Option(
         1, "--pos-weight", help="Weight to give to positive labels."
