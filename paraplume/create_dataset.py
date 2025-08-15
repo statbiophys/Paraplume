@@ -536,7 +536,9 @@ def main( # noqa: PLR0913
     gpu: int = typer.Option(
         0,
         "--gpu",
-        help="Which gpu to use"),
+        help="Choose index of GPU device to use if multiple GPUs available. By default it's the"
+            "first one (index 0). -1 forces cpu usage. If no GPU is available, CPU is used."
+    ),
     single_chain: bool = typer.Option( # noqa: FBT001
         False, # noqa: FBT003
         "--single-chain",

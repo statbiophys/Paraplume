@@ -52,28 +52,28 @@ We recommend installing it in a virtual environment with python >= 3.10.
 
 <details>
 <summary><h1>💻 COMMAND LINE </h1></summary>
-We provide several commands to use the model as inference with the default weights or retrain the model with a custom dataset.
+We provide several commands to use the model as inference with the default weights or retrain the model with a custom dataset. All commands can be run with cpu or gpu, if available (cf gpu option).
 
-`infer-paratope` provides two commands, one to infer the paratope from a unique sequence (`seq-to-paratope`) and another from a batch of sequences in the form of a csv file (`file-to-paratope`).
+`paraplume-infer` provides two commands, one to infer the paratope from a unique sequence (`seq-to-paratope`) and another from a batch of sequences in the form of a csv file (`file-to-paratope`).
 ```bash
-infer-paratope COMMAND [OPTIONS][ARGS] ...
+paraplume-infer COMMAND [OPTIONS][ARGS] ...
 ```
 By default the model used is trained using the 'expanded' dataset from the [Paragraph](https://academic.oup.com/bioinformatics/article/39/1/btac732/6825310) paper, that we divided in 1000 sequences for the training set and 85 sequences for the validation and available in `./datasets/`. PDB `4FQI` was excluded from the train and validation sets as we analyze variants of this antibody in our paper using the trained model.
 
-However we also provide the possibility to use a custom model for inference. To train your custom model you will need to run two commands: `create-dataset` to generate labels and PLM embeddings for your desired training dataset, and `train-model` to train the model.
+However we also provide the possibility to use a custom model for inference. To train your custom model you will need to run two commands: `paraplume-create-dataset` to generate labels and PLM embeddings for your desired training dataset, and `paraplume-train` to train the model.
 
 After training the model on your custom dataset, the model is saved in a folder whose path can be given to the inference commands as a `--custom-model` option.
 <details>
 <summary><h2>📋 Commands</h2></summary>
 
 <details>
-<summary><h3>1. infer-paratope seq-to-paratope</h3></summary>
+<summary><h3>1. paraplume-infer seq-to-paratope</h3></summary>
 
 Predict paratope directly from amino acid sequences provided as command line arguments.
 
 #### Usage
 ```bash
-infer-paratope seq-to-paratope [OPTIONS]
+paraplume-infer seq-to-paratope [OPTIONS]
 ```
 
 #### Options
@@ -82,28 +82,28 @@ infer-paratope seq-to-paratope [OPTIONS]
 | `-h, --heavy-chain` | TEXT | - | Heavy chain amino acid sequence |
 | `-l, --light-chain` | TEXT | - | Light chain amino acid sequence |
 | `--custom-model` | PATH | None | Path to custom trained model folder |
-| `--gpu` | INT | 0 | GPU device to use |
-| `--large/--small` | flag | --large | Model size (large: full Paraplume, small: ESM-2 only) |
+| `--gpu` | INT | 0 | Choose index of GPU device to use if multiple GPUs available. By default it's the first one (index 0). -1 forces cpu usage. If no GPU is available, CPU is used |
+| `--large/--small` | flag | --large | Use default Paraplume which uses the 6 PLMs AbLang2,Antiberty,ESM,ProtT5,IgT5 and IgBert (--large) or the smallest version using only ESM-2 embeddings (--small) |
 
 <details>
 <summary><h4>Examples</h4></summary>
 
 **Both chains:**
 ```bash
-infer-paratope seq-to-paratope \
+paraplume-infer seq-to-paratope \
   -h QAYLQQSGAELVKPGASVKMSCKASDYTFTNYNMHWIKQTPGQGLEWIGAIYPGNGDTSYNQKFKGKATLTADKSSSTAYMQLSSLTSEDSAVYYCASLGSSYFDYWGQGTTLTVSS \
   -l EIVLTQSPTTMAASPGEKITITCSARSSISSNYLHWYQQKPGFSPKLLIYRTSNLASGVPSRFSGSGSGTSYSLTIGTMEAEDVATYYCHQGSNLPFTFGSGTKLEIK
 ```
 
 **Heavy chain only:**
 ```bash
-infer-paratope seq-to-paratope \
+paraplume-infer seq-to-paratope \
   -h QAYLQQSGAELVKPGASVKMSCKASDYTFTNYNMHWIKQTPGQGLEWIGAIYPGNGDTSYNQKFKGKATLTADKSSSTAYMQLSSLTSEDSAVYYCASLGSSYFDYWGQGTTLTVSS
 ```
 
 **Light chain only:**
 ```bash
-infer-paratope seq-to-paratope \
+paraplume-infer seq-to-paratope \
   -l EIVLTQSPTTMAASPGEKITITCSARSSISSNYLHWYQQKPGFSPKLLIYRTSNLASGVPSRFSGSGSGTSYSLTIGTMEAEDVATYYCHQGSNLPFTFGSGTKLEIK
 ```
 
@@ -112,13 +112,13 @@ infer-paratope seq-to-paratope \
 </details>
 
 <details>
-<summary><h3>2. infer-paratope file-to-paratope</h3></summary>
+<summary><h3>2. paraplume-infer file-to-paratope</h3></summary>
 
 Predict paratope from sequences stored in a CSV file.
 
 #### Usage
 ```bash
-infer-paratope file-to-paratope [OPTIONS] FILE_PATH
+paraplume-infer file-to-paratope [OPTIONS] FILE_PATH
 ```
 
 #### Arguments
@@ -131,11 +131,12 @@ infer-paratope file-to-paratope [OPTIONS] FILE_PATH
 |--------|------|---------|-------------|
 | `--custom-model` | PATH | None | Path to custom trained model folder |
 | `--name` | TEXT | paratope_ | Prefix for output file |
-| `--gpu` | INT | 0 | GPU device to use |
+| `--gpu` | INT | 0 | Choose index of GPU device to use if multiple GPUs available. By default it's the first one (index 0). -1 forces cpu usage. If no GPU is available, CPU is used |
+| `--result_folder, -r` | PATH | result | Folder path where to save the results. If not passed the result is saved in the input data folder |
 | `--emb-proc-size` | INT | 100 | Embedding batch size for memory management |
-| `--compute-sequence-embeddings` | flag | False | Compute paratope and classical sequence embeddings |
+| `--compute-sequence-embeddings` | flag | False | Compute both paratope and classical sequence embeddings for each sequence and each of the 6 PLMs AbLang2, Antiberty, ESM, ProtT5, IgT5 and IgBert. Only possible when using the default trained_models/large |
 | `--single-chain` | flag | False | Process single chain sequences |
-| `--large/--small` | flag | --large | Model size (large: Paraplume, small: Paraplume-S, using ESM-2 embedding only) |
+| `--large/--small` | flag | --large | Use default Paraplume which uses the 6 PLMs AbLang2,Antiberty,ESM,ProtT5,IgT5 and IgBert (--large) or the smallest version using only ESM-2 embeddings (--small) |
 
 
 
@@ -144,17 +145,17 @@ infer-paratope file-to-paratope [OPTIONS] FILE_PATH
 
 **Paired chains:**
 ```bash
-infer-paratope file-to-paratope ./tutorial/paired.csv
+paraplume-infer file-to-paratope ./tutorial/paired.csv
 ```
 
 **Heavy chain only:**
 ```bash
-infer-paratope file-to-paratope ./tutorial/heavy.csv --single-chain
+paraplume-infer file-to-paratope ./tutorial/heavy.csv --single-chain
 ```
 
 **Light chain only:**
 ```bash
-infer-paratope file-to-paratope ./tutorial/light.csv --single-chain
+paraplume-infer file-to-paratope ./tutorial/light.csv --single-chain
 ```
 
 Sample input files are available in the `tutorial` folder.
@@ -164,7 +165,7 @@ Sample input files are available in the `tutorial` folder.
 <details>
 <summary><h4>Input</h4></summary>
 
-Your CSV file must contain these columns:
+Your CSV file must include these columns (any additional column is fine):
 
 **For paired chains (default):**
 | sequence_heavy | sequence_light |
@@ -205,13 +206,13 @@ print(predictions.head())
 </details>
 
 <details>
-<summary><h3>3. create-dataset</h3></summary>
+<summary><h3>3. paraplume-create-dataset</h3></summary>
 
 Create dataset to train the neural network. Sequences and labels are saved in a `.json` file, and LPLM embeddings are saved in a `.pt` file.
 
 #### Usage
 ```bash
-create-dataset [OPTIONS] CSV_FILE_PATH PDB_FOLDER_PATH
+paraplume-create-dataset [OPTIONS] CSV_FILE_PATH PDB_FOLDER_PATH
 ```
 
 #### Arguments
@@ -225,14 +226,14 @@ create-dataset [OPTIONS] CSV_FILE_PATH PDB_FOLDER_PATH
 |--------|------|---------|-------------|
 | `--result-folder, -r` | PATH | result | Where to save results |
 | `--emb-proc-size` | INTEGER | 100 | We create embeddings chunk by chunk to avoid memory explosion. This is the chunk size. Optimal value depends on your computer |
-| `--gpu` | INTEGER | 0 | Which gpu to use |
+| `--gpu` | INTEGER | 0 | Choose index of GPU device to use if multiple GPUs available. By default it's the first one (index 0). -1 forces cpu usage. If no GPU is available, CPU is used |
 | `--single-chain` | flag | False | Generate embeddings using llms on single chain mode, which slightly increases performance |
 
 <details>
 <summary><h4>Example</h4></summary>
 
 ```bash
-create-dataset ./tutorial/custom_train_set.csv pdb_folder \
+paraplume-create-dataset ./tutorial/custom_train_set.csv pdb_folder \
   -r training_data \
   --gpu 0 \
   --emb-proc-size 50 \
@@ -270,13 +271,13 @@ Creates a folder with the same name `custom_train_set` inside `training_data`, i
 </details>
 
 <details>
-<summary><h3>4. train-model</h3></summary>
+<summary><h3>4. paraplume-train</h3></summary>
 
 Train the model given provided parameters and data.
 
 #### Usage
 ```bash
-train-model [OPTIONS] TRAIN_FOLDER_PATH VAL_FOLDER_PATH
+paraplume-train [OPTIONS] TRAIN_FOLDER_PATH VAL_FOLDER_PATH
 ```
 
 #### Arguments
@@ -302,13 +303,13 @@ train-model [OPTIONS] TRAIN_FOLDER_PATH VAL_FOLDER_PATH
 | `--alphas` | TEXT | - | Whether to use different alphas labels to help main label |
 | `--patience` | INTEGER | 0 | Patience to use for early stopping. 0 means no early stopping |
 | `--emb-models` | TEXT | all | LLM embedding models to use, separated by commas. LLMs should be in 'ablang2','igbert','igT5','esm','antiberty','prot-t5','all'. Example 'igT5,esm' |
-| `--gpu` | INTEGER | 0 | Which GPU to use |
+| `--gpu` | INTEGER | 0 | Choose index of GPU device to use if multiple GPUs available. By default it's the first one (index 0). -1 forces cpu usage. If no GPU is available, CPU is used |
 
 <details>
 <summary><h4>Example</h4></summary>
 
 ```bash
-train-model training_data/custom_train_set training_data/custom_val_set \
+paraplume-train training_data/custom_train_set training_data/custom_val_set \
   --lr 0.001 \
   -n 50 \
   -r training_results \
@@ -325,7 +326,7 @@ train-model training_data/custom_train_set training_data/custom_val_set \
 <details>
 <summary><h4>Input</h4></summary>
 
-The two arguments (`training_data/custom_train_set` and `training_data/custom_val_set` in the example) are paths of folders created by the previous `create-dataset` command.
+The two arguments (`training_data/custom_train_set` and `training_data/custom_val_set` in the example) are paths of folders created by the previous `paraplume-create-dataset` command.
 
 </details>
 
@@ -355,7 +356,7 @@ Model weights and training parameters are saved in a folder specified by the -r 
 <details>
 <summary><h2>Command Line Tutorial</h2></summary>
 
-If you want to use the default model with the already trained weights, just install the package and run `infer-paratope file-to-paratope ./tutorial/paired.csv` and the result will be available as `paratope_paired.pkl` in the same `tutorial` folder.
+If you want to use the default model with the already trained weights, just install the package and run `paraplume-infer file-to-paratope ./tutorial/paired.csv` and the result will be available as `paratope_paired.pkl` in the same `tutorial` folder.
 
 If you want to train and use your custom model via command line, follow the 4 steps below.
 
@@ -367,17 +368,17 @@ If you want to train and use your custom model via command line, follow the 4 st
 
 #### Step 1: Create training and validation datasets from CSVs
 ```bash
-create-dataset ./tutorial/custom_train_set.csv ./all_structures/imgt -r custom_folder
+paraplume-create-dataset ./tutorial/custom_train_set.csv ./all_structures/imgt -r custom_folder
 ```
 The folder `custom_folder` will be created. Inside this folder the folder `custom_train_set` is created in which there are two files, `dict.json` for the sequences and labels, and `embeddings.pt` for the PLM embeddings.
 Repeat for the validation set (used for early stopping):
 ```bash
-create-dataset ./tutorial/custom_val_set.csv ./all_structures/imgt -r custom_folder
+paraplume-create-dataset ./tutorial/custom_val_set.csv ./all_structures/imgt -r custom_folder
 ```
 
 #### Step 2: Train the model
 ```bash
-train-model ./custom_folder/custom_train_set ./custom_folder/custom_val_set \
+paraplume-train ./custom_folder/custom_train_set ./custom_folder/custom_val_set \
   --lr 0.001 \
   -n 50 \
   --batch-size 8 \
@@ -395,7 +396,7 @@ This will save training results in `custom_folder`.
 After training, your custom model will be saved in the results folder and can be used with inference commands using the `--custom-model` option.
 
 ```bash
-infer-paratope file-to-paratope ./tutorial/paired.csv --custom-model ./custom_folder
+paraplume-infer file-to-paratope ./tutorial/paired.csv --custom-model ./custom_folder
 ```
 
 And the result is available as `paratope_paired.pkl` in the `tutorial` folder !!
@@ -418,8 +419,8 @@ If you want to use to train and use your custom model, follow the command line t
 # ⚡ QUICK START
 
 1. **Install**: `pip install paraplume`
-2. **Single sequence**: `infer-paratope seq-to-paratope -h YOUR_HEAVY_CHAIN -l YOUR_LIGHT_CHAIN`
-3. **File batch**: `infer-paratope file-to-paratope your_file.csv`
+2. **Single sequence**: `paraplume-infer seq-to-paratope -h YOUR_HEAVY_CHAIN -l YOUR_LIGHT_CHAIN`
+3. **File batch**: `paraplume-infer file-to-paratope your_file.csv`
 
 For detailed usage, expand the sections above! 👆
 

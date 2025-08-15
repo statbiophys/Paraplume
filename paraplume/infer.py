@@ -283,26 +283,39 @@ def file_to_paratope(  # noqa: PLR0913
     | None = typer.Option(  # noqa: B008
         None,
         "--custom-model",
-        help="Custom trained model folder path to do inference. Needs to contain the same files \
-            as paraplume/trained_models/large which is the output of a paraplume.train ",
+        help="Custom trained model folder path to do inference. Needs to contain the same files"
+            "as paraplume/trained_models/large which is the output of a training phase. ",
     ),
     name: str = typer.Option(
         "paratope_",
         "--name",
         help="Prefix to add to the file.",
     ),
-    gpu: int = typer.Option(0, "--gpu", help="Which GPU to use."),
+    gpu: int = typer.Option(
+        0,
+        "--gpu",
+        help="Choose index of GPU device to use if multiple GPUs available. By default it's the"
+            "first one (index 0). -1 forces cpu usage. If no GPU is available, CPU is used."
+    ),
     emb_proc_size: int = typer.Option(
         100,
         "--emb-proc-size",
-        help="We create embeddings batch by batch to avoid memory explosion. This is the batch\
-            size. Optimal value depends on your computer. Defaults to 100.",
+        help="We create embeddings batch by batch to avoid memory explosion. This is the batch"
+            "size. Optimal value depends on your computer. Defaults to 100.",
+    ),
+    result_path: Path | None = typer.Option(
+        None,
+        "--result-folder",
+        "-r",
+        help="Folder path where to save the results. If not passed the result is saved in the input"
+            " data folder."
     ),
     compute_sequence_embeddings: bool = typer.Option(  # noqa: FBT001
         False,  # noqa: FBT003
         "--compute-sequence-embeddings",
-        help="Compute paratope and classical sequence embeddings for each sequence and llm.\
-            Only possible when using the default trained_models/large.",
+        help="Compute both paratope and classical sequence embeddings for each sequence "
+        "and each of the 6 PLMs AbLang2, Antiberty, ESM, ProtT5, IgT5 and IgBert. "
+        "Only possible when using the default trained_models/large.",
     ),
     single_chain: bool = typer.Option(  # noqa: FBT001
         False,  # noqa: FBT003
@@ -312,7 +325,8 @@ def file_to_paratope(  # noqa: PLR0913
     large: bool = typer.Option(  # noqa: FBT001
         True,  # noqa: FBT003
         "--large/--small",
-        help="Use default Paraplume or the smallest version using only ESM-2 embeddings.",
+        help="Use default Paraplume which uses the 6 PLMs AbLang2,Antiberty,ESM,ProtT5,IgT5 and "
+            "IgBert (--large) or the smallest version using only ESM-2 embeddings (--small).",
     ),
 ) -> pd.DataFrame:
     """Predict paratope from sequence."""
@@ -326,7 +340,11 @@ def file_to_paratope(  # noqa: PLR0913
         single_chain=single_chain,
         large=large,
     )
-    result_path = file_path.parents[0] / Path(f"{name}" + file_path.stem)
+    if result_path is None:
+        result_path = file_path.parents[0] / Path(f"{name}" + file_path.stem)
+    else:
+        result_path.mkdir(exist_ok=True, parents=True)
+        result_path = result_path/Path(f"{name}" + file_path.stem)
     df.to_pickle(result_path.with_suffix(".pkl"))
     return df
 
@@ -356,11 +374,17 @@ def seq_to_paratope(
             "as paraplume/trained_models/large which is the output of a training phase."
             )
     ),
-    gpu: int = typer.Option(0, "--gpu", help="Which GPU to use."),
+    gpu: int = typer.Option(
+        0,
+        "--gpu",
+        help="Choose index of GPU device to use if multiple GPUs available. By default it's the "
+            "first one (index 0). -1 forces cpu usage. If no GPU is available, CPU is used."
+    ),
     large: bool = typer.Option(  # noqa: FBT001
         True,  # noqa: FBT003
         "--large/--small",
-        help="Use default Paraplume or the smallest version using only ESM-2 embeddings.",
+        help="Use default Paraplume which uses the 6 PLMs AbLang2,Antiberty,ESM,ProtT5,IgT5 and "
+            "IgBert (--large) or the smallest version using only ESM-2 embeddings (--small).",
     ),
 ) -> None:
     """Predict paratope from sequence."""

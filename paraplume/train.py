@@ -25,6 +25,7 @@ from paraplume.utils import (
     get_logger,
     get_metrics,
     save_plot,
+    get_device
 )
 
 app = typer.Typer(add_completion=False)
@@ -112,7 +113,7 @@ def train(  # noqa : PLR0913, PLR0915
     -------
         _type_: _description_
     """
-    device = torch.device(f"cuda:{gpu}" if torch.cuda.is_available() else "cpu")
+    device = get_device(gpu)
     aggregator = UPGrad().to(device)
 
     train_loss_list = []
@@ -323,7 +324,12 @@ def main( # noqa : PLR0913, PLR0915
             "LLMs should be in 'ablang2','igbert','igT5','esm','antiberty',prot-t5','all'. "
             "Example 'igT5,esm'."),
     ),
-    gpu: int = typer.Option(0, "--gpu", help="Which GPU to use."),
+    gpu: int = typer.Option(
+        0,
+        "--gpu",
+        help="Choose index of GPU device to use if multiple GPUs available. By default it's the"
+            "first one (index 0). -1 forces cpu usage. If no GPU is available, CPU is used."
+    ),
 ) -> None:
     """Train the model given provided parameters and data."""
     if (result_folder / Path("summary_dict.json")).exists() and not override:
@@ -396,7 +402,7 @@ def main( # noqa : PLR0913, PLR0915
     criterion = nn.BCEWithLogitsLoss(
         pos_weight=torch.tensor(
             [positive_weight],
-            device=torch.device(f"cuda:{gpu}" if torch.cuda.is_available() else "cpu"),
+            device = get_device(gpu),
         )
     )
     log.info("INITIALIZE OPTIMIZER", learning_rate=learning_rate, weight_decay=l2_pen)
