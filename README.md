@@ -132,7 +132,7 @@ paraplume-infer file-to-paratope [OPTIONS] FILE_PATH
 | `--custom-model` | PATH | None | Path to custom trained model folder |
 | `--name` | TEXT | paratope_ | Prefix for output file |
 | `--gpu` | INT | 0 | Choose index of GPU device to use if multiple GPUs available. By default it's the first one (index 0). -1 forces cpu usage. If no GPU is available, CPU is used |
-| `--result-folder, -r` | PATH | result | Folder path where to save the results. If not passed the result is saved in the input data folder |
+| `--result-folder, -r` | PATH | None | Folder path where to save the results. If not passed the result is saved in the input data folder |
 | `--emb-proc-size` | INT | 100 | Embedding batch size for memory management |
 | `--compute-sequence-embeddings` | flag | False | Compute both paratope and classical sequence embeddings for each sequence and each of the 6 PLMs AbLang2, Antiberty, ESM, ProtT5, IgT5 and IgBert. Only possible when using the default trained_models/large |
 | `--single-chain` | flag | False | Process single chain sequences |
