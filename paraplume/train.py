@@ -20,12 +20,12 @@ from torchjd.aggregation import UPGrad
 from paraplume.torch_dataset import create_dataloader
 from paraplume.utils import (
     EarlyStopping,
+    get_device,
     get_dim,
     get_embedding,
     get_logger,
     get_metrics,
     save_plot,
-    get_device
 )
 
 app = typer.Typer(add_completion=False)
