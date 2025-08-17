@@ -1,0 +1,17 @@
+include README.md
+include LICENSE
+include pyproject.toml
+
+recursive-include paraplume/trained_models *
+
+# Exclude unnecessary stuff from sdist
+prune datasets
+prine doc
+prune docs
+prune data_with_scripts
+prune custom_folder
+prune benchmark
+
+
+# (Optional) Exclude cache/build artifacts
+global-exclude __pycache__ *.py[cod] *.so *.dylib

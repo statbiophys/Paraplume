@@ -51,8 +51,11 @@ dev = [
 ]
 [tool.setuptools.packages.find]
 include = ["paraplume*"]
-exclude=["datasets*","grid_search*","notebooks*","trash_code*","single*"]
+exclude=["datasets*","doc*","data_with_scripts*","custom_folder*","benchmark*"]
 namespaces = false
+
+[tool.setuptools.package-data]
+"paraplume" = ["trained_models/**/*"]
 
 [tool.black]
 line-length = 100
