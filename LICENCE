@@ -1,0 +1,50 @@
+/*    PARAPLUME                                                                             */
+/*    A fast and accurate paratope prediction method provides insights into                 */
+/*    repertoire-scale binding dynamics.                                                    */
+/*    Version 1.0.0                                                                */
+/*    October 2, 2025                                                                       */
+/*                                                                                          */
+/*    Copyright (c) 2025 CNRS, ENS, Université Paris Cité, Sorbonne Université, Bio-Rad SAS */
+/*    Authors: Gabriel ATHENES, Thierry MORA, Aleksandra M. WALCZAK, Adam WOOLFE            */
+/*    Contact: Ronald_Lebofsky@Bio-Rad.com                                                  */
+/*                                                                                          */
+/*    CUSTOM SOFTWARE LICENSE — "PARAPLUME SOFTWARE LICENSE"                                */
+/*                                                                                          */
+/*    This software, named PARAPLUME, is a computer program developed for academic          */
+/*    research purposes. It is made available to the public in the spirit of scientific     */
+/*    sharing, subject to certain restrictions on commercial use.                           */
+/*                                                                                          */
+/*    This license governs the use, reproduction, modification, and redistribution          */
+/*    of the PARAPLUME software, under the conditions described below.                      */
+/*                                                                                          */
+/*    Subject to compliance with this license, you are granted the right to:                */
+/*    - Use the software for private, academic, or institutional purposes.                  */
+/*    - Reproduce and modify the source code.                                               */
+/*    - Redistribute the original or modified software, under the conditions here           */
+/*      after :                                                                             */
+/*                                                                                          */
+/*    (a) Attribution: Any copy, modified or not, must include:                             */
+/*        - This license in full.                                                           */
+/*        - The original copyright notice.                                                  */
+/*        - A clear indication of any modifications, including date and author.             */
+/*                                                                                          */
+/*    (b) Free Redistribution:                                                              */
+/*        Redistribution must be entirely free of charge, direct or indirect,               */
+/*        unless prior written authorization is obtained from the rights holders.           */
+/*                                                                                          */
+/*    Commercial use, including integration into paid products or services,                 */
+/*    is subject to prior written authorization from the rights holders.                    */
+/*                                                                                          */
+/*    This software is provided "AS IS", without any express or implied warranties,         */
+/*    including but not limited to merchantability or fitness for a particular              */
+/*    purpose. In no event shall the authors or affiliated institutions be liable           */
+/*    for any direct, indirect, incidental, or consequential damages.                       */
+/*                                                                                          */
+/*    This code may not be combined with software under incompatible licenses               */
+/*    without prior written permission from the rights holders.                             */
+/*                                                                                          */
+/*    Use of the software implies full acceptance of this license.                          */
+/*                                                                                          */
+/*    The software may include third-party components under different licenses.             */
+/*    A list of such components must be provided with any redistribution.                   */
+/*                                                                                          */
