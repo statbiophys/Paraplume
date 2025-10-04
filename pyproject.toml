@@ -17,7 +17,7 @@ dependencies = [
         "typer>=0.9,<1",
         "torch>=2.5.0,<3",
         "torchjd>=0.6.0,<1",
-        "fair-esm @ git+https://github.com/facebookresearch/esm.git@2b369911bb5b4b0dda914521b9475cad1656b2ac",
+        "fair-esm>=2.0.0,<3",
         "matplotlib>=3.9.2,<4",
         "biopandas>=0.5.1,<1",
         "scikit-learn>=1.5.2,<2",
