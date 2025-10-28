@@ -424,6 +424,12 @@ If you want to use to train and use your custom model, follow the command line t
 
 For detailed usage, expand the sections above! 👆
 
+# 🛠️ Troubleshooting & Notes
+
+- During the **first** inference, Paraplume will automatically download PLM weights inside your virtual environment. This step may take **10–15 minutes**, depending on connection and hardware.
+- This download only happens **once**. Future runs will start right away.
+- If the full model is too heavy for your system, try the **light version** by adding `--small`, which uses only ESM.
+
 # 📧 Contact
 
 Any issues or questions should be addressed to us at **gabrielathenes@gmail.com**.
