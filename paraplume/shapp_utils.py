@@ -102,7 +102,7 @@ def plot_residue_importance(  # noqa: PLR0913
     num_residues, num_plms = importance_matrix.shape
     positions = np.arange(num_residues)
 
-    fig, (ax_labels, ax_importance) = plt.subplots(
+    _, (ax_labels, ax_importance) = plt.subplots(
         2, 1, figsize=(18, 7), sharex=True, gridspec_kw={"height_ratios": [1, 4]}
     )
 
