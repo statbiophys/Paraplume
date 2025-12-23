@@ -206,35 +206,94 @@ print(predictions.head())
 </details>
 
 <details>
-<summary><h3>3. paraplume-create-dataset</h3></summary>
+<summary><h3>3. paraplume-build-dictionary</h3></summary>
 
-Create dataset to train the neural network. Sequences and labels are saved in a `.json` file, and LPLM embeddings are saved in a `.pt` file.
+Create dataset to train the neural network. Sequences and labels are saved in a .json file, and LPLM embeddings are saved in a .pt file.
 
 #### Usage
 ```bash
-paraplume-create-dataset [OPTIONS] CSV_FILE_PATH PDB_FOLDER_PATH
+paraplume-build-dictionary [OPTIONS] CSV_FILE_PATH PDB_FOLDER_PATH
 ```
 
 #### Arguments
+
 | Argument | Type | Required | Description |
 |----------|------|----------|-------------|
-| `CSV_FILE_PATH` | PATH | ✓ | Path of csv file to use for pdb list |
-| `PDB_FOLDER_PATH` | PATH | ✓ | Pdb folder path for ground truth labeling |
+| CSV_FILE_PATH | PATH | ✓ | Path of csv file to use for pdb list |
+| PDB_FOLDER_PATH | PATH | ✓ | Pdb path for ground truth labeling |
 
 #### Options
+
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `--result-folder, -r` | PATH | result | Where to save results |
-| `--emb-proc-size` | INTEGER | 100 | We create embeddings chunk by chunk to avoid memory explosion. This is the chunk size. Optimal value depends on your computer |
-| `--gpu` | INTEGER | 0 | Choose index of GPU device to use if multiple GPUs available. By default it's the first one (index 0). -1 forces cpu usage. If no GPU is available, CPU is used |
-| `--single-chain` | flag | False | Generate embeddings using llms on single chain mode, which slightly increases performance |
+| --result-folder, -r | PATH | result | Where to save results |
+| --help | flag | - | Show this message and exit |
 
 <details>
 <summary><h4>Example</h4></summary>
-
 ```bash
-paraplume-create-dataset ./tutorial/custom_train_set.csv pdb_folder \
-  -r training_data \
+paraplume-build-dictionary ./tutorial/custom_train_set.csv pdb_folder \
+  -r training_data
+```
+
+</details>
+
+<details>
+<summary><h4>Input</h4></summary>
+
+custom_train_set.csv contains information about the PDB files used for training and has the following format:
+
+| pdb | Lchain | Hchain | antigen_chain |
+|------|--------|--------|---------------|
+| 1ahw | D | E | F |
+| 1bj1 | L | H | W |
+| 1ce1 | L | H | P |
+
+**Column descriptions:**
+- **pdb**: PDB code of the antibody-antigen complex (should be available in pdb_folder as `pdb_folder/pdb_code.pdb`)
+- **Lchain**: Light chain identifier used to label the paratope
+- **Hchain**: Heavy chain identifier used to label the paratope
+- **antigen_chain**: Antigen chain identifier used to label the paratope
+
+</details>
+
+<details>
+<summary><h4>Output</h4></summary>
+
+Creates a folder with the same name as the CSV file (e.g., `custom_train_set`) inside the result folder (`training_data`), which contains **dict.json**: Sequences and labels for each structure
+
+</details>
+
+</details>
+
+<summary><h3>4. paraplume-create-embeddings</h3></summary>
+
+Generate PLM embeddings from a dictionary file created by `paraplume-build-dictionary`.
+
+#### Usage
+```bash
+paraplume-create-embeddings [OPTIONS] DICT_PATH
+```
+
+#### Arguments
+
+| Argument | Type | Required | Description |
+|----------|------|----------|-------------|
+| DICT_PATH | PATH | ✓ | Path to the folder containing dict.json |
+
+#### Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| --emb-proc-size | INTEGER | 100 | Chunk size for creating embeddings to avoid memory explosion. Optimal value depends on your computer |
+| --gpu | INTEGER | 0 | Choose index of GPU device to use if multiple GPUs available. By default it's the first one (index 0). -1 forces cpu usage. If no GPU is available, CPU is used |
+| --single-chain | flag | False | Generate embeddings using LLMs on single chain mode, which slightly increases performance |
+| --help | flag | - | Show this message and exit |
+
+<details>
+<summary><h4>Example</h4></summary>
+```bash
+paraplume-create-embeddings ./training_data/custom_train_set/dict.json \
   --gpu 0 \
   --emb-proc-size 50 \
   --single-chain
@@ -245,33 +304,27 @@ paraplume-create-dataset ./tutorial/custom_train_set.csv pdb_folder \
 <details>
 <summary><h4>Input</h4></summary>
 
-`custom_train_set.csv` contains information about the PDB files used for training and has the following format:
-
-| pdb  | Lchain | Hchain | antigen_chain |
-|------|--------|--------|---------------|
-| 1ahw | D      | E      | F             |
-| 1bj1 | L      | H      | W             |
-| 1ce1 | L      | H      | P             |
-
-**Column descriptions:**
-- `pdb`: PDB code of the antibody-antigen complex (should be available in `pdb_folder` as `pdb_folder/pdb_code.pdb`)
-- `Lchain`: Light chain identifier used to label the paratope
-- `Hchain`: Heavy chain identifier used to label the paratope
-- `antigen_chain`: Antigen chain identifier used to label the paratope
+Requires a folder containing:
+- **dict.json**: Dictionary file created by `paraplume-build-dictionary` with sequences and labels
 
 </details>
 
 <details>
 <summary><h4>Output</h4></summary>
 
-Creates a folder with the same name `custom_train_set` inside `training_data`, in which there are two files, `json.dict` with the sequences and labels, and `embeddings.pt` for the PLM embeddings.
+Creates multiple embedding files in the same folder as dict.json:
+- **ablang2_embeddings.pt**: AbLang2 model embeddings
+- **igbert_embeddings.pt**: IgBERT model embeddings
+- **igT5_embeddings.pt**: IgT5 model embeddings
+- **esm_embeddings.pt**: ESM model embeddings
+- **antiberty_embeddings.pt**: AntiBERTy model embeddings
+- **prot-t5_embeddings.pt**: ProtT5 model embeddings
 
 </details>
 
 </details>
 
-<details>
-<summary><h3>4. paraplume-train</h3></summary>
+<summary><h3>5. paraplume-train</h3></summary>
 
 Train the model given provided parameters and data.
 
@@ -300,7 +353,6 @@ paraplume-train [OPTIONS] TRAIN_FOLDER_PATH VAL_FOLDER_PATH
 | `--override` | flag | False | Override results |
 | `--seed` | INTEGER | 0 | Seed to use for training |
 | `--l2-pen` | FLOAT | 0 | L2 penalty to use for the model weights |
-| `--alphas` | TEXT | - | Whether to use different alphas labels to help main label |
 | `--patience` | INTEGER | 0 | Patience to use for early stopping. 0 means no early stopping |
 | `--emb-models` | TEXT | all | LLM embedding models to use, separated by commas. LLMs should be in 'ablang2','igbert','igT5','esm','antiberty','prot-t5','all'. Example 'igT5,esm' |
 | `--gpu` | INTEGER | 0 | Choose index of GPU device to use if multiple GPUs available. By default it's the first one (index 0). -1 forces cpu usage. If no GPU is available, CPU is used |
