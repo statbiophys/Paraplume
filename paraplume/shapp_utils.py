@@ -4,7 +4,6 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
-import seaborn as sns
 import shap
 import torch
 
@@ -145,57 +144,6 @@ def plot_residue_importance(  # noqa: PLR0913
     ax_labels.set_xlim(positions[0] - 0.5, positions[-1] + 0.5)
 
     plt.tight_layout()
-    if save_path:
-        plt.savefig(save_path, dpi=300, bbox_inches="tight")
-        log.info("Heatmap saved.", save_path=save_path)
-
-    plt.show()
-
-
-def plot_importance_heatmap(
-    row_labels: list[str],
-    importance_matrix: np.ndarray,
-    plm_names: list[str],
-    title: str = "PLM Relative Importance",
-    save_path: Path | None = None,
-):
-    """Plot heatmap of PLM importance."""
-    # Mapping from PLM internal names to display labels
-    label_map = {
-        "ablang2": r"AbLang2",
-        "antiberty": r"Antiberty",
-        "esm": r"ESM-2",
-        "igt5": r"IgT5",
-        "igbert": r"IgBert",
-        "prot-t5": r"Prot-T5",
-    }
-    # Format PLM names for display
-    display_names = [label_map.get(name.lower(), name) for name in plm_names]
-
-    num_rows, num_plms = importance_matrix.shape
-
-    fig_width = 1.5 * num_plms
-    fig_height = 0.4 * num_rows + 4
-
-    plt.figure(figsize=(fig_width, fig_height))
-    sns.set(style="whitegrid")
-
-    ax = sns.heatmap(
-        importance_matrix,
-        annot=True,
-        fmt=".2f",
-        cmap="rocket_r",
-        xticklabels=display_names,
-        yticklabels=row_labels,
-        cbar_kws={"label": r"Relative Importance"},
-    )
-
-    ax.set_xlabel(r"Pretrained Language Model (PLM)")
-    ax.set_ylabel(r"Sample")
-    ax.set_title(title)
-
-    plt.tight_layout()
-
     if save_path:
         plt.savefig(save_path, dpi=300, bbox_inches="tight")
         log.info("Heatmap saved.", save_path=save_path)

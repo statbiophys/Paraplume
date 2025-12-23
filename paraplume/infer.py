@@ -9,12 +9,6 @@ import numpy as np
 import pandas as pd
 import torch
 import typer
-from Paraplume.paraplume.shapp_utils import (
-    PLM_EMBEDDING_DIMENSIONS,
-    compute_shap_importance,
-    plot_importance_heatmap,
-    plot_residue_importance,
-)
 
 from paraplume.create_embeddings import (
     compute_ablang_embeddings,
@@ -24,6 +18,11 @@ from paraplume.create_embeddings import (
     compute_igt5_embeddings,
     compute_t5_embeddings,
     process_batch,
+)
+from paraplume.shapp_utils import (
+    PLM_EMBEDDING_DIMENSIONS,
+    compute_shap_importance,
+    plot_residue_importance,
 )
 from paraplume.utils import build_model, get_device, get_logger
 
@@ -97,7 +96,6 @@ def analyze_shap_for_dataframe(  # noqa: PLR0913,PLR0915
             model, heavy_embedding, plm_dimensions, background_heavy
         )
         heavy_importance_per_sequence.append(heavy_importance)
-
     for i in range(len(df)):
         if light_lens[i] == 0:
             light_importance_per_sequence.append([0.0] * len(llm_list))
@@ -110,50 +108,7 @@ def analyze_shap_for_dataframe(  # noqa: PLR0913,PLR0915
         )
         light_importance_per_sequence.append(light_importance)
 
-    # Convert to numpy arrays
-    heavy_importance_matrix = np.array(heavy_importance_per_sequence)
-    light_importance_matrix = np.array(light_importance_per_sequence)
-
-    # 1. Save global importance as JSON
-    global_importance_dict: dict[str, list] = {"plm_names": llm_list, "sequences": []}
-
-    for seq_id, heavy_imp, light_imp in zip(
-        sequence_ids, heavy_importance_per_sequence, light_importance_per_sequence, strict=False
-    ):
-        seq_dict = {
-            "sequence_id": seq_id,
-            "heavy_chain_plm_importance": {
-                plm: float(imp) for plm, imp in zip(llm_list, heavy_imp, strict=False)
-            },
-            "light_chain_plm_importance": {
-                plm: float(imp) for plm, imp in zip(llm_list, light_imp, strict=False)
-            },
-        }
-        global_importance_dict["sequences"].append(seq_dict)
-
-    json_path = output_dir / "global_plm_importance.json"
-    with json_path.open("w", encoding="utf-8") as f:
-        json.dump(global_importance_dict, f, indent=2)
-
-    log.info("Saving global importance dictionary", output_path=json_path.as_posix())
-
-    # 2. Create summary heatmaps for heavy and light chains
-    log.info("Generating summary heatmaps...")
-    plot_importance_heatmap(
-        row_labels=sequence_ids,
-        importance_matrix=heavy_importance_matrix,
-        plm_names=llm_list,
-        title="Heavy Chain PLM Relative Importance Across Sequences",
-        save_path=output_dir / "summary_heavy_chain_plm_importance_heatmap.png",
-    )
-    plot_importance_heatmap(
-        row_labels=sequence_ids,
-        importance_matrix=light_importance_matrix,
-        plm_names=llm_list,
-        title="Light Chain PLM Relative Importance Across Sequences",
-        save_path=output_dir / "summary_light_chain_plm_importance_heatmap.png",
-    )
-    # 3. Create individual heatmaps and residue plots for each sequence (separate heavy/light)
+    # 1. Create individual heatmaps and residue plots for each sequence (separate heavy/light)
     log.info("Generating per-sequence visualizations...")
     for i in range(len(df)):
         if heavy_lens[i] == 0:
@@ -178,8 +133,6 @@ def analyze_shap_for_dataframe(  # noqa: PLR0913,PLR0915
             importance_matrix=heavy_residue_matrix,
             plm_names=llm_list,
             save_path=output_dir / f"{seq_id}_heavy_chain_residue_importance.png",
-            rotation=90,
-            xlabel_font=8,
         )
     for i in range(len(df)):
         if light_lens[i] == 0:
@@ -208,7 +161,6 @@ def analyze_shap_for_dataframe(  # noqa: PLR0913,PLR0915
             plm_names=llm_list,
             save_path=output_dir / f"{seq_id}_light_chain_residue_importance.png",
             rotation=90,
-            xlabel_font=8,
         )
     log.info("SHAP analysis complete!")
 

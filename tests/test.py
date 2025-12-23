@@ -1,12 +1,13 @@
 """Run tests on the package."""
+
 import unittest
-import pandas as pd
 from pathlib import Path
-from paraplume.infer import predict_paratope, predict_paratope_seq
+
+import pandas as pd
+from Paraplume.paraplume.infer import predict_paratope, predict_paratope_seq
 
 
 class Test(unittest.TestCase):
-
     def setUp(self):
         # Determine path to tests/data relative to this test file
         test_dir = Path(__file__).parent
@@ -19,19 +20,23 @@ class Test(unittest.TestCase):
     def test_sequence(self):
         heavy_seq = self.df_paired["sequence_heavy"].values[0]
         light_seq = self.df_paired["sequence_light"].values[0]
-        for large in [True,False]:
+        for large in [True, False]:
             paratope_heavy, paratope_light = predict_paratope_seq(heavy_seq, light_seq, large=large)
             self.assertIsInstance(paratope_heavy[0], float)
             self.assertIsInstance(paratope_light[0], float)
 
-            paratope_heavy, paratope_light = predict_paratope_seq(sequence_heavy=heavy_seq, large=large, single_chain=True)
+            paratope_heavy, paratope_light = predict_paratope_seq(
+                sequence_heavy=heavy_seq, large=large, single_chain=True
+            )
             self.assertIsInstance(paratope_heavy[0], float)
 
-            paratope_heavy, paratope_light = predict_paratope_seq(sequence_light=light_seq, large=large, single_chain=True)
+            paratope_heavy, paratope_light = predict_paratope_seq(
+                sequence_light=light_seq, large=large, single_chain=True
+            )
             self.assertIsInstance(paratope_light[0], float)
 
     def test_configurations(self):
-        for large in [True,False]:
+        for large in [True, False]:
             paratope_heavy = predict_paratope(self.df_heavy, large=large, single_chain=True)
             self.assertIn("model_prediction_heavy", paratope_heavy.columns)
             self.assertIsInstance(paratope_heavy["model_prediction_heavy"].values[0][0], float)
@@ -47,6 +52,7 @@ class Test(unittest.TestCase):
             )
             self.assertIsInstance(paratope_paired["model_prediction_heavy"].values[0][0], float)
             self.assertIsInstance(paratope_paired["model_prediction_light"].values[0][0], float)
+
 
 if __name__ == "__main__":
     unittest.main()

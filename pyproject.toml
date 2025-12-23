@@ -21,6 +21,7 @@ dependencies = [
         "biopandas>=0.5.1,<1",
         "scikit-learn>=1.5.2,<2",
         "sentencepiece>=0.2.0,<1",
+        "shap<1",
 ]
 authors = [{name = "Gabriel Athènes", email = "gabriel.athenes@polytechnique.edu"}]
 maintainers = [{name = "Gabriel Athènes", email = "gabriel.athenes@polytechnique.edu"}]
