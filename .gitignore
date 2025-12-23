@@ -1,1 +1,16 @@
 *.gz
+trash
+docs
+graph_extension
+data_with_scripts
+custom_folder
+benchmark
+benchmark_revisions
+datasets
+tutorial
+.**
+*egg-info
+*.pyc
+*.pkl
+*.ipynb
+paraplume/__pycache__/

@@ -57,6 +57,7 @@ namespaces = false
 
 [tool.setuptools.package-data]
 "paraplume" = ["trained_models/**/*"]
+"paraplume" = ["background/**/*"]
 
 [tool.black]
 line-length = 100

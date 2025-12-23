@@ -401,7 +401,8 @@ def file_to_paratope(  # noqa: PLR0913
     compute_shap: bool = typer.Option(  # noqa: FBT001
         False,  # noqa: FBT003
         "--compute-shap",
-        help="Compute SHAP importance analysis and generate visualizations.",
+        help="Compute SHAP importance analysis and generate visualizations. A folder 'shap_results'"
+        " will be created with a plot inside for each sequence.",
     ),
 ) -> pd.DataFrame:
     """Predict paratope from sequence."""

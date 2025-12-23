@@ -3,14 +3,21 @@ include LICENSE
 include pyproject.toml
 
 recursive-include paraplume/trained_models *
+recursive-include paraplume/background *
+
 
 # Exclude unnecessary stuff from sdist
 prune datasets
-prine doc
+prune doc
 prune docs
 prune data_with_scripts
 prune custom_folder
-prune benchmark
+prune benchmark_revisions
+prune graph_extension
+prune trash
+prune result
+prune tutorial
+
 
 
 # (Optional) Exclude cache/build artifacts

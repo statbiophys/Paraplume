@@ -3,6 +3,7 @@
 </h1>
 
 **Paraplume** is a sequence-based paratope prediction method. It predicts which amino acids in an antibody sequence are likely to interact with an antigen during binding. Concretely, given an amino acid sequence, the model returns a **probability for each residue** indicating the likelihood of antigen interaction.
+Go check out our [paper](https://arxiv.org/abs/2510.05626) to see how Paraplume can be used to study antibody evolution/function !
 
 <h1 align="center">
   <img src="doc/example_github.png" width="500">
@@ -60,7 +61,7 @@ paraplume-infer COMMAND [OPTIONS][ARGS] ...
 ```
 By default the model used is trained using the 'expanded' dataset from the [Paragraph](https://academic.oup.com/bioinformatics/article/39/1/btac732/6825310) paper, that we divided in 1000 sequences for the training set and 85 sequences for the validation and available in `./datasets/`. PDB `4FQI` was excluded from the train and validation sets as we analyze variants of this antibody in our paper using the trained model.
 
-However we also provide the possibility to use a custom model for inference. To train your custom model you will need to run two commands: `paraplume-create-dataset` to generate labels and PLM embeddings for your desired training dataset, and `paraplume-train` to train the model.
+However we also provide the possibility to use a custom model for inference. To train your custom model you will need to run three commands: `paraplume-build-dictionary` to generate labels, `paraplume-create-embeddings` to create PLM embeddings for your desired training dataset, and `paraplume-train` to train the model.
 
 After training the model on your custom dataset, the model is saved in a folder whose path can be given to the inference commands as a `--custom-model` option.
 <details>
@@ -137,6 +138,7 @@ paraplume-infer file-to-paratope [OPTIONS] FILE_PATH
 | `--compute-sequence-embeddings` | flag | False | Compute both paratope and classical sequence embeddings for each sequence and each of the 6 PLMs AbLang2, Antiberty, ESM, ProtT5, IgT5 and IgBert. Only possible when using the default trained_models/large |
 | `--single-chain` | flag | False | Process single chain sequences |
 | `--large/--small` | flag | --large | Use default Paraplume which uses the 6 PLMs AbLang2,Antiberty,ESM,ProtT5,IgT5 and IgBert (--large) or the smallest version using only ESM-2 embeddings (--small) |
+│ `--compute-shap` | flag | False | Compute SHAP importance analysis and generate visualizations. A folder 'shap_results' will be created with a plot inside for each sequence.|
 
 
 
@@ -231,9 +233,9 @@ paraplume-build-dictionary [OPTIONS] CSV_FILE_PATH PDB_FOLDER_PATH
 
 <details>
 <summary><h4>Example</h4></summary>
+
 ```bash
-paraplume-build-dictionary ./tutorial/custom_train_set.csv pdb_folder \
-  -r training_data
+paraplume-build-dictionary ./tutorial/custom_train_set.csv pdb_folder -r training_data
 ```
 
 </details>
@@ -266,9 +268,11 @@ Creates a folder with the same name as the CSV file (e.g., `custom_train_set`) i
 
 </details>
 
+<details>
 <summary><h3>4. paraplume-create-embeddings</h3></summary>
 
-Generate PLM embeddings from a dictionary file created by `paraplume-build-dictionary`.
+Generate PLM embeddings from a dictionary file created by `paraplume-build-dictionary` and saves them
+in the folder of the dictionary.
 
 #### Usage
 ```bash
@@ -292,6 +296,7 @@ paraplume-create-embeddings [OPTIONS] DICT_PATH
 
 <details>
 <summary><h4>Example</h4></summary>
+
 ```bash
 paraplume-create-embeddings ./training_data/custom_train_set/dict.json \
   --gpu 0 \
@@ -304,8 +309,7 @@ paraplume-create-embeddings ./training_data/custom_train_set/dict.json \
 <details>
 <summary><h4>Input</h4></summary>
 
-Requires a folder containing:
-- **dict.json**: Dictionary file created by `paraplume-build-dictionary` with sequences and labels
+Path of **dict.json**: Dictionary file created by `paraplume-build-dictionary` with sequences and labels
 
 </details>
 
@@ -324,6 +328,7 @@ Creates multiple embedding files in the same folder as dict.json:
 
 </details>
 
+<details>
 <summary><h3>5. paraplume-train</h3></summary>
 
 Train the model given provided parameters and data.
@@ -378,7 +383,7 @@ paraplume-train training_data/custom_train_set training_data/custom_val_set \
 <details>
 <summary><h4>Input</h4></summary>
 
-The two arguments (`training_data/custom_train_set` and `training_data/custom_val_set` in the example) are paths of folders created by the previous `paraplume-create-dataset` command.
+The two arguments (`training_data/custom_train_set` and `training_data/custom_val_set` in the example) are paths of folders created by the previous `paraplume-build-dictionary` command.
 
 </details>
 
@@ -420,12 +425,27 @@ If you want to train and use your custom model via command line, follow the 4 st
 
 #### Step 1: Create training and validation datasets from CSVs
 ```bash
-paraplume-create-dataset ./tutorial/custom_train_set.csv ./all_structures/imgt -r custom_folder
+paraplume-build-dictionary ./tutorial/custom_train_set.csv ./all_structures/imgt -r custom_folder
 ```
-The folder `custom_folder` will be created. Inside this folder the folder `custom_train_set` is created in which there are two files, `dict.json` for the sequences and labels, and `embeddings.pt` for the PLM embeddings.
+followed by
+```bash
+paraplume-create-embeddings ./custom_folder/custom_train_set/dict.json \
+  --gpu 0 \
+  --emb-proc-size 50 \
+  --single-chain
+```
+
+The folder `custom_folder` will be created. Inside this folder the folder `custom_train_set` is created in which there are two files, `dict.json` for the sequences and labels, and emebddings for each of the 6 PLM.
 Repeat for the validation set (used for early stopping):
 ```bash
-paraplume-create-dataset ./tutorial/custom_val_set.csv ./all_structures/imgt -r custom_folder
+paraplume-build-dictionary ./tutorial/custom_val_set.csv ./all_structures/imgt -r custom_folder
+```
+followed by
+```bash
+paraplume-create-embeddings ./custom_folder/custom_val_set/dict.json \
+  --gpu 0 \
+  --emb-proc-size 50 \
+  --single-chain
 ```
 
 #### Step 2: Train the model
@@ -460,13 +480,45 @@ And the result is available as `paratope_paired.pkl` in the `tutorial` folder !!
 
 A comprehensive Python tutorial for default inference usage (using the already trained weights) with examples is available in the `tutorial` folder.
 
-If you want to use to train and use your custom model, follow the command line tutorial, or use the code available in `paraplume/create_dataset.py` and `paraplume/train.py` (function main in both files). Don't hesitate to contact me if you need help **gabrielathenes@gmail.com**.
+If you want to use to train and use your custom model, follow the command line tutorial. Don't hesitate to contact me if you need help **gabrielathenes@gmail.com**.
 
 </details>
-
 </details>
+<hr style="height:3px;border:none;background-color:#ff6b6b;" />
+<details>
+<summary><h1>📊 Benchmark</h1></summary>
+
+The benchmark was conducted using **Paraplume v1.0.0**. The final model configuration used a learning rate of
+\(1 \times 10^{-5}\), a batch size of 16 sequences, and the ADAM optimizer with an L2 regularization weight of
+\(1 \times 10^{-5}\). The MLP architecture consisted of three hidden layers with widths of 2000, 1000, and 500.
+A summary of the explored hyperparameter ranges and the selected values is provided in **Table S4** of the
+[paper](https://arxiv.org/abs/2510.05626).
+
+All experiments were performed on a workstation equipped with two NVIDIA RTX 5000 Ada
+GPUs (32 GB VRAM each). Models were trained and evaluated using random seeds 1 through 16, and all reported
+results correspond to averages across these seeds.
+
+All scripts and generated data are publicly available on the
+[Zenodo repository](https://zenodo.org/records/17021232).
+</details>
+
 
 <hr style="height:3px;border:none;background-color:#ff6b6b;" />
+
+<details>
+<summary><h1>📊 Interpretability</h1></summary>
+
+Predictions and PLM importance over residues can be visualized with the `--compute-shap`  option of `paraplume-infer file-to-paratope`.
+
+<h1 align="center">
+  <img src="doc/intepretability.png" width="500">
+</h1>
+
+</details>
+
+
+<hr style="height:3px;border:none;background-color:#ff6b6b;" />
+
 
 # ⚡ QUICK START
 
