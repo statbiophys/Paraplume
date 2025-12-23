@@ -3,130 +3,95 @@
 from typing import Any
 
 import torch
-import torch.nn.functional as F  # noqa : N812
 from torch.utils.data import Dataset
 
 
 class ParaplumeDataset(Dataset):
-    """Create dataset from dictionary of sequences and labels, and from embedidngs."""
+    """
+    Dataset for antibody-antigen residue-residue interaction prediction.
+
+    Each sample corresponds to a pair (i, j):
+        - i = residue index in antibody
+        - j = residue index in antigen
+        - label = 1 if residues i and j are in contact (≤ 4.5 Å), else 0
+
+    Args:
+        dataset_dict (dict): Dictionary built by build_dictionary().
+        antibody_embeddings (torch.Tensor): Antibody per-residue embeddings, shape (N, L_ab, D_ab).
+        mode (str): Whether to load the dataset in training or testing mode.
+    """
 
     def __init__(
         self,
         dataset_dict: dict[str, dict[str, Any]],
-        embeddings: torch.Tensor,
-        alphas: list | None = None,
-        mode: str = "train",
+        antibody_embeddings: torch.Tensor,
+        mode="train",
     ):
-        """Initialize."""
+        self.antibody_embeddings = antibody_embeddings
+        # Build an index mapping (sample_idx, i, j) for all pairs
+        self.dataset = []
         self.mode = mode
-        self.dataset_dict = dataset_dict
-        self.embeddings = embeddings
-        self.alphas = alphas
+        for sample_idx, value in dataset_dict.items():
+            sample_idx_int = int(sample_idx)
+
+            len_heavy = len(value["H_id labels 4.5"])
+            pdb_code = value["pdb_code"]
+            labels_ab = value["H_id labels 4.5"] + value["L_id labels 4.5"]
+            numbers_ab = value["H_id numbers"] + value["L_id numbers"]
+            sequence = value["H_id sequence"] + value["L_id sequence"]
+
+            for i in range(len(labels_ab)):
+                label = labels_ab[i]
+                chain = "H"
+                real_pos = i
+                if i >= len_heavy:
+                    chain = "L"
+                    real_pos = i - len_heavy
+                num = numbers_ab[i]
+                aa = sequence[i]
+                self.dataset.append((sample_idx_int, label, num, i, real_pos, chain, pdb_code, aa))
 
     def __len__(self):
-        """Return number of sequences in dataset."""
-        return self.embeddings.shape[0]
+        """Return total number of antibody-antigen residue pairs."""
+        return len(self.dataset)
 
-    def __getitem__(self, index) -> tuple:
-        """Return embeddings and labels for training model for given index."""
-        main_labels_heavy = self.dataset_dict[str(index)]["H_id labels 4.5"]
-        main_labels_light = self.dataset_dict[str(index)]["L_id labels 4.5"]
-        numbers_heavy = self.dataset_dict[str(index)]["H_id numbers"]
-        numbers_light = self.dataset_dict[str(index)]["L_id numbers"]
-        pdb_code = self.dataset_dict[str(index)]["pdb_code"]
-        embedding = self.embeddings[index, :, :]
-        main_labels_paired = main_labels_heavy + main_labels_light
-        main_labels = torch.FloatTensor(
-            F.pad(
-                torch.FloatTensor(main_labels_paired),
-                (0, 285 - len(torch.FloatTensor(main_labels_paired))),
-                "constant",
-                0,
-            )
-        )
-        len_heavy = len(main_labels_heavy)
-        len_light = len(main_labels_light)
-        labels_list = get_other_labels(self.dataset_dict, index, alphas=self.alphas)
+    def __getitem__(self, idx):
+        """Return embedding pair and label for (antibody residue i, antigen residue j)."""
+        (sample_idx, label, num, i, real_pos, chain, pdb_code, aa) = self.dataset[idx]
+        # Retrieve embeddings
+        ab_emb = self.antibody_embeddings[sample_idx][i]  # shape (D_ab,)
 
-        if self.mode == "train":
-            return (
-                embedding,
-                main_labels,
-                len_heavy,
-                len_light,
-                *labels_list,
-            )
         if self.mode == "test":
-            return (embedding, main_labels, len_heavy, len_light)
-        if self.mode == "predict":
-            return (
-                embedding,
-                main_labels,
-                len_heavy,
-                len_light,
-                pdb_code,
-                numbers_heavy,
-                numbers_light,
-            )
-        raise ValueError("Invalid mode. Choose from 'train', 'test', 'predict'")
-
-def get_other_labels(
-    dataset_dict: dict[str, dict[str, Any]], index: int, alphas: list | None = None
-) -> list[torch.Tensor]:
-    """Return list of tensors of padded labels for different alphas.
-
-    Args:
-        dataset_dict (Dict[str, Dict[str, Any]]): Dictionary mapping indices to positions, \
-            imgt numbers and labels.
-        index (int): Index of dictionary.
-        alphas (Optional[List]): List of alphas to use for multi objective \
-            optimization. Defaults to None.
-
-    Returns
-    -------
-        List[torch.Tensor]: List of padded labels.
-    """
-    labels_list: list[torch.Tensor] = []
-    if alphas is None:
-        return labels_list
-    for alpha in alphas:
-        labels_heavy = dataset_dict[str(index)][f"H_id labels {alpha}"]
-        labels_light = dataset_dict[str(index)][f"L_id labels {alpha}"]
-        labels_paired = labels_heavy + labels_light
-        labels_padded = torch.FloatTensor(
-            F.pad(
-                torch.FloatTensor(labels_paired),
-                (0, 285 - len(torch.FloatTensor(labels_paired))),
-                "constant",
-                0,
-            )
+            return (sample_idx, ab_emb, label, num, i, real_pos, chain, pdb_code, aa)
+        return (
+            sample_idx,
+            ab_emb,
+            label,
+            num,
+            i,
+            real_pos,
         )
-        labels_list.append(labels_padded)
-    return labels_list
+
 
 def create_dataloader(
     dataset_dict: dict[str, dict[str, Any]],
     embeddings: torch.Tensor,
-    alphas: list[str] | None = None,
-    mode: str = "train",
     batch_size: int = 16,
+    mode: str = "train",
 ) -> torch.utils.data.dataloader.DataLoader:
     """Take dataset_dict and embeddings and return dataloader.
 
     Args:
         dataset_dict (Dict[str, Dict[str, Any]]): Dictionary of sequences and labels.
-        embeddings (torch.Tensor): Correspondng embeddings.
+        embeddings (torch.Tensor): Corresponding embeddings.
         batch_size (int, optional): Batch size. Defaults to 16.
         mode (str): "Returns different dataloader depending on whether its "train", "valid"\
             or "predict" mode.
-        alphas (List[str], optional): Alphas to use for multi objective training. Defaults to None.
 
     Returns
     -------
         torch.utils.data.dataloader.DataLoader: Dataloader to use for training.
     """
     shuffle = mode == "train"
-    dataset = ParaplumeDataset(
-        dataset_dict=dataset_dict, embeddings=embeddings, alphas=alphas, mode=mode
-    )
+    dataset = ParaplumeDataset(dataset_dict=dataset_dict, antibody_embeddings=embeddings, mode=mode)
     return torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
