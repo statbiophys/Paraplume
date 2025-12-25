@@ -56,8 +56,7 @@ exclude=["datasets*","doc*","data_with_scripts*","custom_folder*","benchmark*"]
 namespaces = false
 
 [tool.setuptools.package-data]
-"paraplume" = ["trained_models/**/*"]
-"paraplume" = ["background/**/*"]
+"paraplume" = ["trained_models/**/*", "background/**/*"]
 
 [tool.black]
 line-length = 100
