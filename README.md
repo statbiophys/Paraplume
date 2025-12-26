@@ -443,8 +443,7 @@ followed by
 ```bash
 paraplume-create-embeddings ./custom_folder/custom_val_set/dict.json \
   --gpu 0 \
-  --emb-proc-size 50 \
-  --single-chain
+  --emb-proc-size 50
 ```
 
 #### Step 2: Train the model
