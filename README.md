@@ -431,8 +431,7 @@ followed by
 ```bash
 paraplume-create-embeddings ./custom_folder/custom_train_set/dict.json \
   --gpu 0 \
-  --emb-proc-size 50 \
-  --single-chain
+  --emb-proc-size 50
 ```
 
 The folder `custom_folder` will be created. Inside this folder the folder `custom_train_set` is created in which there are two files, `dict.json` for the sequences and labels, and emebddings for each of the 6 PLM.
