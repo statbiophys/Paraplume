@@ -534,6 +534,30 @@ For detailed usage, expand the sections above! 👆
 - This download only happens **once**. Future runs will start right away.
 - If the full model is too heavy for your system, try the **light version** by adding `--small`, which uses only ESM.
 
+<details>
+<summary><h2>Common Issues</h2></summary>
+
+#### AbLang2 Download Error
+
+If you encounter the following error:
+```
+CalledProcessError: Command '['tar', '-zxvf', 'YOURFOLDER/tmp.tar.gz',
+'-C', 'YOURFOLDER']' returned non-zero exit status 2.
+```
+
+This occurs because AbLang2 failed to download its model weights from the Zenodo server.
+
+**Fix:** Download the weights manually:
+```bash
+TARGET=YOURFOLDER
+mkdir -p "$TARGET"
+curl -L "https://zenodo.org/records/10185169/files/ablang2-weights.tar.gz" | tar -xz -C "$TARGET"
+```
+
+Replace `YOURFOLDER` with the actual path shown in your error message. After running these commands, Paraplume should work correctly.
+
+</details>
+
 # 📧 Contact
 
 Any issues or questions should be addressed to us at **gabrielathenes@gmail.com**.
