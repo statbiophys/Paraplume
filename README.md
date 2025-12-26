@@ -506,7 +506,7 @@ All scripts and generated data are publicly available on the
 <hr style="height:3px;border:none;background-color:#ff6b6b;" />
 
 <details>
-<summary><h1>📊 Interpretability</h1></summary>
+<summary><h1>🔍 Interpretability</h1></summary>
 
 Predictions and PLM importance over residues can be visualized with the `--compute-shap`  option of `paraplume-infer file-to-paratope`.
 
