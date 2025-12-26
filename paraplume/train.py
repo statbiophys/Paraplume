@@ -1,28 +1,20 @@
 """Train model."""
 
 import json
+from collections.abc import Callable
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 import numpy as np
 import torch
 import typer
 from torch import nn
-from torch.nn import Dropout, Linear, ReLU, Sequential
 from tqdm import tqdm
-
-if TYPE_CHECKING:
-    from torch.nn import Module  # used only for typing
-
-from torchjd import mtl_backward
-from torchjd.aggregation import UPGrad
 
 from paraplume.torch_dataset import create_dataloader
 from paraplume.utils import (
     EarlyStopping,
+    build_model,
     get_device,
-    get_dim,
-    get_embedding,
     get_logger,
     get_metrics,
     save_plot,
@@ -32,57 +24,13 @@ app = typer.Typer(add_completion=False)
 log = get_logger()
 
 
-def get_outputs( # noqa : PLR0913
-    embedding: torch.Tensor,
-    labels: torch.Tensor,
-    len_heavy: torch.Tensor,
-    len_light: torch.Tensor,
-    model: torch.nn.Sequential,
-    embedding_models_list: list,
-) -> tuple[torch.Tensor, torch.Tensor]:
-    """Get model outputs and labels.
-
-    Args:
-        embedding (torch.Tensor):
-        labels (torch.Tensor):
-        len_heavy (torch.Tensor): Lenghts of the heavy sequences for each element of the batch.
-        len_light (torch.Tensor): Lenghts of the light sequences for each element of the batch.
-        model (torch.nn.Sequential):
-        embedding_models_list (List): List of embedding models for which to get the\
-            pre-computed embeddings.
-
-    Returns
-    -------
-        Tuple[torch.Tensor,torch.Tensor]: Labels and outputs.
-    """
-    embedding_list = []
-    label_list = []
-    for i in range(len_heavy.shape[-1]):
-        heavy, light = len_heavy[i], len_light[i]
-        emb = get_embedding(
-            embedding=embedding[i],
-            embedding_models=embedding_models_list,
-            heavy=heavy,
-            light=light,
-        )
-        embedding_list.append(emb)
-        label_list.append(labels[i][: heavy + light])
-    embedding = torch.cat(embedding_list, dim=0)
-    labels = torch.cat(label_list, dim=0)
-    output = model(embedding)
-    return labels, output
-
-
 def train(  # noqa : PLR0913, PLR0915
-    shared_module: torch.nn.Sequential,
-    main_task_module: torch.nn.Sequential,
-    other_tasks: list[torch.nn.Sequential],
+    model: torch.nn.Sequential,
     train_loader: torch.utils.data.dataloader.DataLoader,
     val_loader: torch.utils.data.dataloader.DataLoader,
     optimizer: torch.optim.Adam,
     model_save_path: Path,
-    criterion: nn.BCEWithLogitsLoss,
-    embedding_models_list: list[str],
+    criterion: Callable,
     n_epochs: int = 3,
     mask_prob: float = 0,
     patience: int = 0,
@@ -114,8 +62,6 @@ def train(  # noqa : PLR0913, PLR0915
         _type_: _description_
     """
     device = get_device(gpu)
-    aggregator = UPGrad().to(device)
-
     train_loss_list = []
     val_loss_list = []
     auc_list = []
@@ -125,78 +71,32 @@ def train(  # noqa : PLR0913, PLR0915
     threshold_list = []
     best_val_mcc_threshold_list = []
     best_val_f1_threshold_list = []
-
+    model = model.to(device)
     early_stopping = EarlyStopping(patience=patience, path=model_save_path, best_score=0)
     for epoch in range(1, n_epochs + 1):
         train_loss = 0.0
-        shared_module.train()
-        main_task_module.train()
+        model.train()
         # Training
         for (
-            embedding_raw,
-            main_labels_raw,
-            len_heavy_raw,
-            len_light_raw,
-            *other_labels_raw,
+            _,
+            ab_emb_cpu,
+            label_cpu,
+            _,
+            _,
+            _,
         ) in tqdm(train_loader):
-            embedding = embedding_raw.to(device)
-            main_labels = main_labels_raw.to(device)
-            len_heavy = len_heavy_raw.to(device)
-            len_light = len_light_raw.to(device)
-            other_labels = [label.to(device) for label in other_labels_raw]
-
-            embedding_list = []
-            main_labels_list = []
-            other_labels_list: list[list[torch.Tensor]] = []
-            other_labels_list = [[] for _ in other_labels]
-            for i in range(len_heavy.shape[-1]):
-                heavy, light = len_heavy[i], len_light[i]
-                emb = get_embedding(
-                    embedding=embedding[i],
-                    embedding_models=embedding_models_list,
-                    heavy=heavy,
-                    light=light,
-                )
-                lab_main = main_labels[i][: heavy + light]
-                main_labels_list.append(lab_main)
-                for j, each in enumerate(other_labels):
-                    other_label = each[i][: heavy + light]
-                    other_labels_list[j].append(other_label)
-                drop_mask = torch.rand(emb.size(), device=emb.device) >= mask_prob
-                emb = emb * drop_mask.float()
-                embedding_list.append(emb)
-            embedding = torch.cat(embedding_list, dim=0)
-            main_labels = torch.cat(main_labels_list, dim=0)
-            other_labels = [torch.cat(each, dim=0) for each in other_labels_list]
+            ab_emb = ab_emb_cpu.to(device)
+            label = label_cpu.to(device)
+            # Apply dropout (as in original logic)
+            drop_mask = torch.rand_like(ab_emb) >= mask_prob
+            ab_emb = ab_emb * drop_mask.float()
             optimizer.zero_grad()
-            shared_module = shared_module.to(device)
-            main_task_module = main_task_module.to(device)
-            features = shared_module(embedding)
-            output_main = main_task_module(features).view(-1)
-            loss_main = criterion(output_main, main_labels)
-            other_outputs = []
-            other_tasks_params = []
-            for task in other_tasks:
-                task_on_device = task.to(device)
-                other_outputs.append(task_on_device(features).view(-1))
-                other_tasks_params+=[task_on_device.parameters()]
-            other_losses = []
-            for other_output, other_label in zip(other_outputs, other_labels, strict=False):
-                other_losses.append(criterion(other_output, other_label))
-            losses = [loss_main]
-            task_params = [main_task_module.parameters()]
-            losses += [*other_losses]
-            task_params += [*other_tasks_params]
-            losses = [loss.to(device) for loss in losses]
-            mtl_backward(
-                losses=losses,
-                features=features,
-                tasks_params=task_params,
-                shared_params=shared_module.parameters(),
-                aggregator=aggregator,
-            )
+            output = model(ab_emb).view(-1)
+            loss = criterion(output, label.float())
+            loss.backward()
             optimizer.step()
-            train_loss += loss_main.item() * embedding.size(0)
+
+            train_loss += loss.item() * ab_emb.size(0)
         train_loss /= float(len(train_loader.dataset))
         train_loss_list.append(train_loss)
         log.info("Saving train loss and epoch", epoch=epoch, train_loss=train_loss)
@@ -205,25 +105,17 @@ def train(  # noqa : PLR0913, PLR0915
         all_outputs = np.array([], dtype=np.float32)
         all_targets = np.array([], dtype=np.float32)
         with torch.no_grad():
-            model = nn.Sequential(shared_module, main_task_module)
             model.eval()
-            for embedding_raw, labels_raw, len_heavy, len_light in val_loader:
-                embedding, labels = embedding_raw.to(device), labels_raw.to(device)
-                labels, output = get_outputs(
-                    embedding=embedding,
-                    labels=labels,
-                    len_heavy=len_heavy,
-                    len_light=len_light,
-                    model=model,
-                    embedding_models_list=embedding_models_list,
-                )
-                output_sigmoid = torch.sigmoid(output).view(-1).detach().cpu().numpy()
-                output = output.view(-1)
-                loss = criterion(output, labels)
-                val_loss += loss.item() * embedding.size(0)
-                labels = labels.detach().cpu().numpy()
-                all_outputs = np.concatenate((all_outputs, output_sigmoid))
-                all_targets = np.concatenate((all_targets, labels))
+            for _, ab_emb_cpu, label_cpu, _, _, _ in val_loader:
+                ab_emb = ab_emb_cpu.to(device)
+                label = label_cpu.to(device).float()
+                output = model(ab_emb).view(-1)
+                loss = criterion(output, label)
+                output = output.detach().cpu().numpy()
+                val_loss += loss.item() * ab_emb.size(0)
+                label_np = label.detach().cpu().numpy()
+                all_outputs = np.concatenate((all_outputs, output))
+                all_targets = np.concatenate((all_targets, label_np))
             val_loss /= float(len(val_loader.dataset))
             val_loss_list.append(val_loss)
 
@@ -267,72 +159,69 @@ def train(  # noqa : PLR0913, PLR0915
 
 
 @app.command()
-def main( # noqa : PLR0913, PLR0915
-    train_folder_path: Path = typer.Argument( # noqa : B008
+def main(  # noqa: PLR0913
+    train_folder_path: Path = typer.Argument(  # noqa : B008
         ...,
         help="Path of trainfolder.",
         show_default=False,
     ),
-    val_folder_path: Path = typer.Argument( # noqa : B008
+    val_folder_path: Path = typer.Argument(  # noqa : B008
         ...,
         help="Path of valfolder.",
         show_default=False,
     ),
-    learning_rate: float = typer.Option(0.001, "--lr", help="Learning rate to use for training."),
+    learning_rate: float = typer.Option(0.00001, "--lr", help="Learning rate to use for training."),
     n_epochs: int = typer.Option(
         1, "--n_epochs", "-n", help="Number of epochs to use for training."
     ),
-    result_folder: Path = typer.Option( # noqa : B008
+    result_folder: Path = typer.Option(  # noqa : B008
         Path("./result/"), "--result-folder", "-r", help="Where to save results."
     ),
-    positive_weight: float = typer.Option(
-        1, "--pos-weight", help="Weight to give to positive labels."
-    ),
-    batch_size: int = typer.Option(10, "--batch-size", "-bs", help="Batch size."),
+    batch_size: int = typer.Option(4096, "--batch-size", "-bs", help="Batch size."),
     mask_prob: float = typer.Option(
-        0,
+        0.4,
         "--mask-prob",
         help="Probability with which to mask each embedding coefficient.",
     ),
     dropouts: str = typer.Option(
-        "0",
+        "0.4,0.4,0.4",
         "--dropouts",
-        help="Dropout probabilities for each hidden layer, separated by commas. Example '0.3,0.3'."
+        help="Dropout probabilities for each hidden layer, separated by commas. Example '0.3,0.3'.",
     ),
     dims: str = typer.Option(
-        "1000",
+        "2000,1000,500",
         "--dims",
         help="Dimensions of hidden layers. Separated by commas. Example '100,100'",
     ),
-    override: bool = typer.Option(False, "--override", help="Override results. Defaults to False"), # noqa : FBT001, FBT003
+    override: bool = typer.Option(False, "--override", help="Override results. Defaults to False"),  # noqa : FBT001, FBT003
     seed: int = typer.Option(0, "--seed", help="Seed to use for training."),
-    l2_pen: float = typer.Option(0, "--l2-pen", help="L2 penalty to use for the model weights."),
-    alphas: str = typer.Option(
-        "-",
-        "--alphas",
-        help="Whether to use different alphas labels to help main label.",
+    l2_pen: float = typer.Option(
+        0.00001, "--l2-pen", help="L2 penalty to use for the model weights."
     ),
     patience: int = typer.Option(
-        0,
+        10,
         "--patience",
         help="Patience to use for early stopping. 0 means no early stopping.",
     ),
     embedding_models: str = typer.Option(
         "all",
         "--emb-models",
-        help=("LLM embedding models to use, separated by commas. "
+        help=(
+            "LLM embedding models to use, separated by commas. "
             "LLMs should be in 'ablang2','igbert','igT5','esm','antiberty',prot-t5','all'. "
-            "Example 'igT5,esm'."),
+            "Example 'igT5,esm'."
+        ),
     ),
     gpu: int = typer.Option(
         0,
         "--gpu",
         help="Choose index of GPU device to use if multiple GPUs available. By default it's the"
-            "first one (index 0). -1 forces cpu usage. If no GPU is available, CPU is used."
+        "first one (index 0). -1 forces cpu usage. If no GPU is available, CPU is used.",
     ),
 ) -> None:
     """Train the model given provided parameters and data."""
     if (result_folder / Path("summary_dict.json")).exists() and not override:
+        print((result_folder / Path("summary_dict.json")).as_posix())
         log.info("Not overriding results.")
         return
     if (result_folder / Path("summary_dict.json")).exists():
@@ -343,68 +232,46 @@ def main( # noqa : PLR0913, PLR0915
     if embedding_models == "all":
         embedding_models = "ablang2,igbert,igT5,esm,antiberty,prot-t5"
     embedding_models_list = embedding_models.split(",")
-    alphas_list = None
-    if alphas != "-":
-        alphas_list = alphas.split(",")
+    train_embeddings = torch.cat(
+        [
+            torch.load(train_folder_path / Path(f"{model}_embeddings.pt"), weights_only=True)
+            for model in embedding_models_list
+        ],
+        dim=-1,
+    )
+    val_embeddings = torch.cat(
+        [
+            torch.load(val_folder_path / Path(f"{model}_embeddings.pt"), weights_only=True)
+            for model in embedding_models_list
+        ],
+        dim=-1,
+    )
     if seed > 0:
         torch.manual_seed(seed)
-    input_size = get_dim(embedding_models=embedding_models_list)
+    input_size = train_embeddings.shape[-1]
     dims_list = [int(each) for each in dims.split(",")]
     dropouts_list = [float(each) for each in dropouts.split(",")]
     log.info("LOADING DICTIONARY AND EMBEDDINGS")
     with (train_folder_path / Path("dict.json")).open(encoding="utf-8") as f:
         dict_train = json.load(f)
-    train_embeddings = torch.load(train_folder_path / Path("embeddings.pt"), weights_only=True)
     with (val_folder_path / Path("dict.json")).open(encoding="utf-8") as f:
         dict_val = json.load(f)
-    val_embeddings = torch.load(val_folder_path / Path("embeddings.pt"), weights_only=True)
     log.info("CREATING DATALOADER")
     train_loader = create_dataloader(
         dataset_dict=dict_train,
         embeddings=train_embeddings,
         batch_size=batch_size,
-        alphas=alphas_list,
-        mode="train",
     )
     val_loader = create_dataloader(
         dataset_dict=dict_val,
         embeddings=val_embeddings,
         batch_size=batch_size,
-        mode="test",
     )
     log.info("INITIALIZE MODEL", hidden_layer_dimensions=dims_list, dropouts=dropouts)
-    layers: list[Module] = []
-    for i, _ in enumerate(dims_list):
-        if i == 0:
-            layers.append(Linear(input_size, dims_list[i]))
-            layers.append(Dropout(dropouts_list[i]))
-            layers.append(ReLU())
-        else:
-            layers.append(Linear(dims_list[i - 1], dims_list[i]))
-            layers.append(Dropout(dropouts_list[i]))
-            layers.append(ReLU())
-    shared_module = Sequential(*layers)
-    main_task_module = Sequential(Linear(dims_list[-1], 1))
-    params = [*shared_module.parameters(), *main_task_module.parameters()]
-    other_tasks = []
-    if alphas_list:
-        other_tasks = [
-            Sequential(Linear(dims_list[-1], 1))
-            for _ in alphas_list
-        ]
-        for task in other_tasks:
-            params += [*task.parameters()]
-    log.info(
-        "INITIALIZE LOSS FUNCTION",
-        weight=positive_weight,
-        criterion="BCE with logits loss",
-    )
-    criterion = nn.BCEWithLogitsLoss(
-        pos_weight=torch.tensor(
-            [positive_weight],
-            device = get_device(gpu),
-        )
-    )
+    model = build_model(input_size=input_size, dims_list=dims_list, dropouts_list=dropouts_list)
+    params = model.parameters()
+
+    criterion = nn.BCELoss()
     log.info("INITIALIZE OPTIMIZER", learning_rate=learning_rate, weight_decay=l2_pen)
     optimizer = torch.optim.Adam(params, lr=learning_rate, weight_decay=l2_pen)
     model_save_path = result_folder / Path("checkpoint.pt")
@@ -420,9 +287,7 @@ def main( # noqa : PLR0913, PLR0915
         f1_list,
         mcc_list,
     ) = train(
-        shared_module=shared_module,
-        main_task_module=main_task_module,
-        other_tasks=other_tasks,
+        model=model,
         train_loader=train_loader,
         val_loader=val_loader,
         optimizer=optimizer,
@@ -431,7 +296,6 @@ def main( # noqa : PLR0913, PLR0915
         model_save_path=model_save_path,
         mask_prob=mask_prob,
         patience=patience,
-        embedding_models_list=embedding_models_list,
         gpu=gpu,
     )
     log.info(
@@ -458,14 +322,12 @@ def main( # noqa : PLR0913, PLR0915
         "learning_rate": learning_rate,
         "n_epochs": n_epochs,
         "result_folder": str(result_folder),
-        "positive_weight": positive_weight,
         "dims": dims,
         "mask_prob": mask_prob,
         "dropouts": dropouts,
         "batch_size": batch_size,
         "override": override,
         "seed": seed,
-        "alphas": alphas,
         "patience": patience,
         "embedding_models": embedding_models,
         "input_size": str(input_size),

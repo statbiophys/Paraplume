@@ -3,7 +3,6 @@
 import logging
 from collections import defaultdict
 from pathlib import Path
-from typing import Any
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -18,7 +17,7 @@ from sklearn.metrics import (
     matthews_corrcoef,
     roc_auc_score,
 )
-from tqdm import tqdm
+from torch import nn
 
 
 def rec_dd():
@@ -287,98 +286,6 @@ def get_metrics(
     )
 
 
-def build_dictionary(
-    pdb_dataframe: pd.DataFrame,
-    pdb_folder_path: Path = Path("/home/gathenes/all_structures/imgt_renumbered_expanded"),
-) -> dict[str, dict[str, Any]]:
-    """Transform dataframe with pdb codes, heavy and light chains into dictionary.
-
-    Args:
-        pdb_dataframe (pd.DataFrame): Dataframe with pdb codes and heavy and light chain names.
-        pdb_folder_path (Path): Folder path from which to construct ground truth.
-
-    Returns
-    -------
-        Dict[str, Dict[str, Any]]: Dictionary with indices mapping to heavy and light lists of \
-            matching imgt numbers, sequences and labels.
-    """
-    dataset_dict = rec_dd()
-    for index in tqdm(range(len(pdb_dataframe))):
-        # get pdb codes and chain names
-        pdb_code = pdb_dataframe.iloc[index]["pdb"]
-        h_id = pdb_dataframe.iloc[index]["Hchain"]  # noqa: F841
-        l_id = pdb_dataframe.iloc[index]["Lchain"]  # noqa: F841
-        antigen_id = pdb_dataframe.iloc[index]["antigen_chain"]
-
-        # load dataframe
-        if not (pdb_folder_path / Path(f"{pdb_code}.pdb")).exists():
-            raise ValueError(f"{pdb_code} not in {pdb_folder_path.as_posix()}")
-        df_pdb = read_pdb_to_dataframe(pdb_folder_path / Path(f"{pdb_code}.pdb"))
-        # Get each dataframe for each chain type
-        df_chain_heavy = df_pdb.query("chain_id == @h_id and residue_number<129")
-        df_chain_light = df_pdb.query("chain_id == @l_id and residue_number<128")
-        antigen_ids = antigen_id.split(";")  # noqa: F841
-        df_chain_antigen = df_pdb.query("chain_id.isin(@antigen_ids)")
-        if len(df_chain_antigen) == 0:
-            raise ValueError(f"Empty antigen, please check pdb {pdb_code}")
-
-        if len(df_chain_heavy) > 0:
-            position_dict_heavy, distance_dict_heavy = get_binding_residues(
-                df_chain_heavy, df_chain_antigen
-            )
-            labels_heavy_4_5, sequence_heavy, numbers_heavy = get_labels(
-                position_dict_heavy, distance_dict_heavy, alpha=4.5
-            )
-            distances_heavy = [np.min(distance_dict_heavy[each]) for each in numbers_heavy]
-            dataset_dict[index]["H_id distances"] = distances_heavy
-            dataset_dict[index]["H_id numbers"] = numbers_heavy
-            dataset_dict[index]["H_id sequence"] = "".join(sequence_heavy)
-            dataset_dict[index]["H_id labels 4.5"] = labels_heavy_4_5
-            for alpha in [3, 3.5, 4, 5, 5.5, 6, 6.5, 7, 7.5]:
-                labels_heavy, _, _ = get_labels(
-                    position_dict_heavy, distance_dict_heavy, alpha=alpha
-                )
-                dataset_dict[index][f"H_id labels {alpha}"] = labels_heavy
-        else:
-            dataset_dict[index]["H_id distances"] = []
-            dataset_dict[index]["H_id numbers"] = []
-            dataset_dict[index]["H_id sequence"] = ""
-            dataset_dict[index]["H_id labels 4.5"] = []
-            for alpha in [3, 3.5, 4, 5, 5.5, 6, 6.5, 7, 7.5]:
-                dataset_dict[index][f"H_id labels {alpha}"] = []
-
-        if len(df_chain_light) > 0:
-            position_dict_light, distance_dict_light = get_binding_residues(
-                df_chain_light, df_chain_antigen
-            )
-            labels_light_4_5, sequence_light, numbers_light = get_labels(
-                position_dict_light, distance_dict_light, alpha=4.5
-            )
-            distances_light = [np.min(distance_dict_light[each]) for each in numbers_light]
-            dataset_dict[index]["L_id distances"] = distances_light
-            dataset_dict[index]["L_id numbers"] = numbers_light
-            dataset_dict[index]["L_id sequence"] = "".join(sequence_light)
-            dataset_dict[index]["L_id labels 4.5"] = labels_light_4_5
-            for alpha in [3, 3.5, 4, 5, 5.5, 6, 6.5, 7, 7.5]:
-                labels_light, _, _ = get_labels(
-                    position_dict_light,
-                    distance_dict_light,
-                    alpha=alpha,
-                )
-                dataset_dict[index][f"L_id labels {alpha}"] = labels_light
-        else:
-            dataset_dict[index]["L_id distances"] = []
-            dataset_dict[index]["L_id numbers"] = []
-            dataset_dict[index]["L_id sequence"] = ""
-            dataset_dict[index]["L_id labels 4.5"] = []
-            for alpha in [3, 3.5, 4, 5, 5.5, 6, 6.5, 7, 7.5]:
-                dataset_dict[index][f"L_id labels {alpha}"] = []
-
-        dataset_dict[index]["pdb_code"] = pdb_code
-
-    return dataset_dict
-
-
 def get_embedding(
     embedding: torch.Tensor, embedding_models: list[str], heavy: int, light: int
 ) -> torch.Tensor:
@@ -417,7 +324,8 @@ def get_embedding(
         emb_list.append(embedding[ran_aa][:, ran_embpos])
     return torch.cat(emb_list, dim=1)
 
-def get_device(gpu:int=0)-> torch.device:
+
+def get_device(gpu: int = 0) -> torch.device:
     """Return gpu device on 'gpu' if cuda is available, otherwise return cpu device.
 
     Args:
@@ -428,10 +336,39 @@ def get_device(gpu:int=0)-> torch.device:
         torch.device: Gpu or cpu pytorch device.
     """
     if torch.cuda.is_available():
-        if gpu < torch.cuda.device_count() and gpu>=0:
+        if gpu < torch.cuda.device_count() and gpu >= 0:
             return torch.device(f"cuda:{gpu}")
         print(f"Warning: GPU index {gpu} not available. Falling back to CPU.")
     return torch.device("cpu")
+
+
+def build_model(input_size: int, dims_list: list, dropouts_list: list) -> nn.Sequential:
+    """Build the MLP model.
+
+    Args:
+        input_size (int): Input size, sum of the embeddings dimension.
+        dims_list (list): List of the intermediate hidden layers dimensions.
+        dropouts_list (list): List of dropouts values.
+
+    Returns
+    -------
+        model (nn.Sequential): Layers of Feed Forward neural networks.
+    """
+    layers: list[torch.nn.Module] = []
+
+    for i, dim in enumerate(dims_list):
+        if i == 0:
+            layers.append(nn.Linear(input_size, dim))
+        else:
+            layers.append(nn.Linear(dims_list[i - 1], dim))
+        layers.append(nn.Dropout(dropouts_list[i]))
+        layers.append(nn.ReLU())
+
+    # Final task layer
+    layers.append(nn.Linear(dims_list[-1], 1))
+    layers.append(nn.Sigmoid())
+    return nn.Sequential(*layers)
+
 
 log = get_logger()
 
