@@ -486,7 +486,7 @@ If you want to use to train and use your custom model, follow the command line t
 </details>
 <hr style="height:3px;border:none;background-color:#ff6b6b;" />
 <details>
-<summary><h1>📊 Benchmark</h1></summary>
+<summary><h1>📊 BENCHMARK</h1></summary>
 
 The benchmark was conducted using **Paraplume v1.0.0**. The final model configuration used a learning rate of
 \(1 \times 10^{-5}\), a batch size of 16 sequences, and the ADAM optimizer with an L2 regularization weight of
@@ -506,7 +506,7 @@ All scripts and generated data are publicly available on the
 <hr style="height:3px;border:none;background-color:#ff6b6b;" />
 
 <details>
-<summary><h1>🔍 Interpretability</h1></summary>
+<summary><h1>🔍 INTERPRETABILITY</h1></summary>
 
 Predictions and PLM importance over residues can be visualized with the `--compute-shap`  option of `paraplume-infer file-to-paratope`.
 
