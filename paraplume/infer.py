@@ -205,7 +205,7 @@ def predict_paratope(  # noqa: PLR0913,PLR0915
     """
     device = get_device(gpu)
     if not custom_model:
-        subfolder = "large" if large else "small"
+        subfolder = "large_1_0" if large else "small_1_0"
         with resources.as_file(
             resources.files("paraplume.trained_models") / subfolder
         ) as model_path:
@@ -219,10 +219,13 @@ def predict_paratope(  # noqa: PLR0913,PLR0915
     dims = [int(each) for each in summary_dict["dims"].split(",")]
     dropouts = [0] * len(dims)
 
-    model = build_model(input_size, dims, dropouts)
     model_path = custom_model / Path("checkpoint.pt")
+    state_dict = torch.load(model_path, weights_only=True, map_location=device)
+    nested = any("0.0." in key for key in state_dict.keys())
+
+    model = build_model(input_size, dims, dropouts, nested=nested)
     log.info("Loading model.", path=model_path.as_posix())
-    model.load_state_dict(torch.load(model_path, weights_only=True, map_location=device))
+    model.load_state_dict(state_dict)
     model.eval()
     model = model.to(device)
 
@@ -460,7 +463,7 @@ def predict_paratope_seq(  # noqa: PLR0913
     """
     device = get_device(gpu)
     if not custom_model:
-        subfolder = "large" if large else "small"
+        subfolder = "large_1_0" if large else "small_1_0"
         with resources.as_file(
             resources.files("paraplume.trained_models") / subfolder
         ) as model_path:
@@ -472,9 +475,13 @@ def predict_paratope_seq(  # noqa: PLR0913
     dims = [int(each) for each in summary_dict["dims"].split(",")]
     dropouts = [0] * len(dims)
 
-    model = build_model(input_size, dims, dropouts)
     model_path = custom_model / Path("checkpoint.pt")
-    model.load_state_dict(torch.load(model_path, weights_only=True, map_location=device))
+    state_dict = torch.load(model_path, weights_only=True, map_location=device)
+    nested = any("0.0." in key for key in state_dict.keys())
+
+    model = build_model(input_size, dims, dropouts, nested=nested)
+    log.info("Loading model.", path=model_path.as_posix())
+    model.load_state_dict(state_dict)
     model.eval()
     model = model.to(device)
 

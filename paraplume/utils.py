@@ -342,18 +342,29 @@ def get_device(gpu: int = 0) -> torch.device:
     return torch.device("cpu")
 
 
-def build_model(input_size: int, dims_list: list, dropouts_list: list) -> nn.Sequential:
+def build_model(
+    input_size: int, dims_list: list, dropouts_list: list, *, nested: bool = False
+) -> nn.Sequential:
     """Build the MLP model.
 
     Args:
         input_size (int): Input size, sum of the embeddings dimension.
         dims_list (list): List of the intermediate hidden layers dimensions.
         dropouts_list (list): List of dropouts values.
+        nested (bool, optional): If True, creates nested Sequential structure (old format).
+                                If False, creates flat structure (new format).
+                                If None, defaults to flat structure.
 
     Returns
     -------
         model (nn.Sequential): Layers of Feed Forward neural networks.
     """
+    if not dims_list:
+        raise ValueError("dims_list cannot be empty")
+
+    if len(dims_list) != len(dropouts_list):
+        raise ValueError("dims_list and dropouts_list must have the same length")
+
     layers: list[torch.nn.Module] = []
 
     for i, dim in enumerate(dims_list):
@@ -365,6 +376,12 @@ def build_model(input_size: int, dims_list: list, dropouts_list: list) -> nn.Seq
         layers.append(nn.ReLU())
 
     # Final task layer
+    if nested:
+        # Old nested structure: Sequential(Sequential(*layers), Sequential(Linear, Sigmoid))
+        hidden_layers = nn.Sequential(*layers)
+        output_layers = nn.Sequential(nn.Linear(dims_list[-1], 1), nn.Sigmoid())
+        return nn.Sequential(hidden_layers, output_layers)
+    # New flat structure
     layers.append(nn.Linear(dims_list[-1], 1))
     layers.append(nn.Sigmoid())
     return nn.Sequential(*layers)
