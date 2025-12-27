@@ -17,6 +17,8 @@ prune graph_extension
 prune trash
 prune result
 prune tutorial
+prune /home/athenes/Paraplume/paraplume/trained_models/large
+prune /home/athenes/Paraplume/paraplume/trained_models/small
 
 
 
