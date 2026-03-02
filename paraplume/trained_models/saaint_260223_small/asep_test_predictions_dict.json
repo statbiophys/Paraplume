@@ -1,0 +1,14 @@
+{
+    "model_path": "/home/athenes/Paraplume/paraplume/trained_models/saaint_260223_small/checkpoint.pt",
+    "test_folder_path": "/home/athenes/Paraplume/benchmark/saaint/asep_test",
+    "result_folder": "/home/athenes/Paraplume/paraplume/trained_models/saaint_260223_small",
+    "total_param": 1782001,
+    "ap": 0.721971254679592,
+    "roc": 0.9562861414898892,
+    "f1": 0.6524529280500496,
+    "mcc": 0.6257061804447933,
+    "flattened_ap": 0.6834092753682961,
+    "flattened_roc": 0.955295190704462,
+    "flattened_f1": 0.6582897033158813,
+    "flattened_mcc": 0.6242657400652912
+}
