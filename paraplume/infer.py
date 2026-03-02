@@ -205,7 +205,7 @@ def predict_paratope(  # noqa: PLR0913,PLR0915
     """
     device = get_device(gpu)
     if not custom_model:
-        subfolder = "large_1_0" if large else "small_1_0"
+        subfolder = "saaint_260223" if large else "saaint_260223_small"
         with resources.as_file(
             resources.files("paraplume.trained_models") / subfolder
         ) as model_path:
@@ -463,7 +463,7 @@ def predict_paratope_seq(  # noqa: PLR0913
     """
     device = get_device(gpu)
     if not custom_model:
-        subfolder = "large_1_0" if large else "small_1_0"
+        subfolder = "saaint_260223" if large else "saaint_260223_small"
         with resources.as_file(
             resources.files("paraplume.trained_models") / subfolder
         ) as model_path:

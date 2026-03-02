@@ -118,7 +118,7 @@ def test(  # noqa : PLR0913, PLR0915
         preds_bin = (pdb_to_concat["prediction"] >= THRESHOLD).astype(int).tolist()
 
         labs = pdb_to_concat["labels"].tolist()
-        if len(set(labs)) == 1:
+        if len(set(labs)) == 1 or len(labs) == 0:
             continue
         ap = average_precision_score(labs, preds)
         roc = roc_auc_score(labs, preds)
@@ -199,9 +199,13 @@ def main(  # noqa: PLR0913
     if embedding_models == "all":
         embedding_models = "ablang2,igbert,igT5,esm,antiberty,prot-t5"
     embedding_models_list = embedding_models.split(",")
-    model = build_model(input_size=input_size, dims_list=dims, dropouts_list=dropouts)
+    state_dict = torch.load(model_path, weights_only=True)
+    nested = any("0.0." in key for key in state_dict.keys())
+    model = build_model(
+        input_size=input_size, dims_list=dims, dropouts_list=dropouts, nested=nested
+    )
     print("LOADING MODEL")
-    model.load_state_dict(torch.load(model_path, weights_only=True))
+    model.load_state_dict(state_dict)
     model.eval()
     total_params = sum(p.numel() for p in model.parameters())
     print("RETRIEVING RESULTS")
