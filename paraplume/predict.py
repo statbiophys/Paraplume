@@ -197,7 +197,7 @@ def main(  # noqa: PLR0913
     input_size = int(summary_dict["input_size"])
     embedding_models = summary_dict["embedding_models"]
     if embedding_models == "all":
-        embedding_models = "ablang2,igbert,igT5,esm,antiberty,prot-t5"
+        embedding_models = "igbert,igT5,esm,antiberty,prot-t5"
     embedding_models_list = embedding_models.split(",")
     model = build_model(input_size=input_size, dims_list=dims, dropouts_list=dropouts)
     print("LOADING MODEL")

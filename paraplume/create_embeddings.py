@@ -5,16 +5,13 @@ import re
 import warnings
 from collections.abc import Callable
 from pathlib import Path
-
-import ablang2
-import esm
 import numpy as np
 import torch
 import torch.nn.functional as F  # noqa: N812
 import typer
 from antiberty import AntiBERTyRunner
 from tqdm import tqdm
-from transformers import BertModel, BertTokenizer, T5EncoderModel, T5Tokenizer
+from transformers import BertModel, BertTokenizer, EsmModel, EsmTokenizer, T5EncoderModel, T5Tokenizer
 
 from paraplume.utils import get_device, get_logger
 
@@ -91,42 +88,6 @@ def compute_antiberty_embeddings(
     return torch.Tensor(np.stack(antiberty_embeddings))
 
 
-def compute_ablang_embeddings(
-    sequence_heavy_emb: list,
-    sequence_light_emb: list,
-    gpu: int = 0,  # noqa: ARG001
-    *,
-    single_chain: bool = False,  # noqa: ARG001
-) -> torch.Tensor:
-    """Compute ablang-2 embeddings.
-
-    Args:
-        sequence_heavy_emb (List): Heavy sequences.
-        sequence_light_emb (List): Light sequences.
-        gpu (int): Gpu to use.
-        single_chain (bool): Single chain mode.
-
-    Returns
-    -------
-        torch.Tensor: Ablang2 embeddings.
-    """
-    ablang = ablang2.pretrained()  # Move to GPU
-    all_seqs = [
-        [seq_heavy, seq_light]
-        for seq_heavy, seq_light in zip(sequence_heavy_emb, sequence_light_emb, strict=False)
-    ]
-    ablang_embeddings = ablang(all_seqs, mode="rescoding", stepwise_masking=False)
-    lenghts_heavy = [len(seq_heavy) for seq_heavy in sequence_heavy_emb]
-    ablang_embeddings = [
-        np.concatenate([each[1 : len_heavy + 1, :], each[len_heavy + 4 :, :]], axis=0)
-        for each, len_heavy in zip(ablang_embeddings, lenghts_heavy, strict=False)
-    ]
-    ablang_embeddings = [
-        np.pad(each, ((0, 285 - each.shape[0]), (0, 0)), "constant") for each in ablang_embeddings
-    ]
-    return torch.Tensor(np.stack(ablang_embeddings))
-
-
 def compute_esm_embeddings(
     sequence_heavy_emb: list,
     sequence_light_emb: list,
@@ -147,27 +108,17 @@ def compute_esm_embeddings(
         torch.Tensor: ESM embeddings.
     """
     device = get_device(gpu)
-
-    esm_model, esm_alphabet = esm.pretrained.esm2_t33_650M_UR50D()
-    esm_model = esm_model.to(device)  # Move model to GPU
-    esm_batch_converter = esm_alphabet.get_batch_converter()
+    tokenizer = EsmTokenizer.from_pretrained("facebook/esm2_t33_650M_UR50D")
+    esm_model = EsmModel.from_pretrained("facebook/esm2_t33_650M_UR50D").to(device)
     esm_model.eval()
-    valid_characters = set(esm_alphabet.all_toks)
 
-    data = []
-    for seq_heavy, seq_light in zip(sequence_heavy_emb, sequence_light_emb, strict=False):
-        cleaned_seq_heavy = "".join(
-            [char if char in valid_characters else "X" for char in seq_heavy]
-        )
-        cleaned_seq_light = "".join(
-            [char if char in valid_characters else "X" for char in seq_light]
-        )
-        data.append(("ab", "".join(cleaned_seq_heavy) + "".join(cleaned_seq_light)))
-    _, _, esm_batch_tokens = esm_batch_converter(data)
-    esm_batch_tokens = esm_batch_tokens.to(device)  # Move to GPU
+    sequences = [
+        "".join(seq_heavy) + "".join(seq_light)
+        for seq_heavy, seq_light in zip(sequence_heavy_emb, sequence_light_emb, strict=False)
+    ]
+    inputs = tokenizer(sequences, return_tensors="pt", padding=True).to(device)
     with torch.no_grad():
-        esm_results = esm_model(esm_batch_tokens, repr_layers=[33], return_contacts=False)
-    esm_embeddings = esm_results["representations"][33]
+        esm_embeddings = esm_model(**inputs).last_hidden_state
     esm_embeddings = esm_embeddings[:, 1:, :]
     pad_length = 285 - esm_embeddings.size(1)  # 285 is the desired length
     padding = (0, 0, 0, pad_length)
@@ -513,16 +464,6 @@ def main(
         gpu=gpu,
     )
     save_embedding_pt("igbert_embeddings", bert_embeddings, save_folder)
-
-    log.info("CREATING EMBEDDINGS", embedding_model="Ablang2")
-    ablang_embeddings = process_batch(
-        compute_ablang_embeddings,
-        sequence_heavy_emb,
-        sequence_light_emb,
-        emb_proc_size,
-        gpu=gpu,
-    )
-    save_embedding_pt("ablang2_embeddings", ablang_embeddings, save_folder)
 
     log.info("CREATING EMBEDDINGS", embedding_model="Antiberty")
     antiberty_embeddings = process_batch(

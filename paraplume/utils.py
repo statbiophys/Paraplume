@@ -65,7 +65,6 @@ def get_dim(embedding_models: list[str]) -> int:
         int: Dimension -1.
     """
     embedding_dims = {
-        "ablang2": 480,
         "igT5": 1024,
         "igbert": 1024,
         "esm": 1280,
@@ -284,45 +283,6 @@ def get_metrics(
         np.max(f1_scores),
         np.max(mcc_scores),
     )
-
-
-def get_embedding(
-    embedding: torch.Tensor, embedding_models: list[str], heavy: int, light: int
-) -> torch.Tensor:
-    """Return tensor of embedding given lengths of heavy and light chains and embeddings to use.
-
-    Args:
-        embedding (torch.Tensor): Total embedding in which to do selection.
-        embedding_models (List[str]): List of embeddings to use.
-        heavy (int): Heavy chain length.
-        light (int): Light chain length.
-
-    Returns
-    -------
-        torch.Tensor: Embedding tensor to be used by the model.
-    """
-    embedding_coords_aa = {
-        "ablang2": list(range(1, heavy + 1)) + list(range(heavy + 4, heavy + light + 4)),
-        "igT5": list(range(1, heavy + 1)) + list(range(heavy + 2, heavy + light + 2)),
-        "igbert": list(range(1, heavy + 1)) + list(range(heavy + 2, heavy + light + 2)),
-        "esm": list(range(1, heavy + light + 1)),
-        "antiberty": list(range(1, heavy + light + 1)),
-        "prot-t5": list(range(heavy + light)),
-    }
-    embedding_coords_embpos = {
-        "ablang2": list(range(2048, 2528)),
-        "igT5": list(range(1024, 2048)),
-        "igbert": list(range(1024)),
-        "esm": list(range(2528, 3808)),
-        "antiberty": list(range(3808, 4320)),
-        "prot-t5": list(range(4320, 5344)),
-    }
-    emb_list = []
-    for emb_model in embedding_models:
-        ran_aa = embedding_coords_aa[emb_model]
-        ran_embpos = embedding_coords_embpos[emb_model]
-        emb_list.append(embedding[ran_aa][:, ran_embpos])
-    return torch.cat(emb_list, dim=1)
 
 
 def get_device(gpu: int = 0) -> torch.device:
