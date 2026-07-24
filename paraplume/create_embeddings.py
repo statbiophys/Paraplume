@@ -5,13 +5,21 @@ import re
 import warnings
 from collections.abc import Callable
 from pathlib import Path
+
 import numpy as np
 import torch
 import torch.nn.functional as F  # noqa: N812
 import typer
 from antiberty import AntiBERTyRunner
 from tqdm import tqdm
-from transformers import BertModel, BertTokenizer, EsmModel, EsmTokenizer, T5EncoderModel, T5Tokenizer
+from transformers import (
+    BertModel,
+    BertTokenizer,
+    EsmModel,
+    EsmTokenizer,
+    T5EncoderModel,
+    T5Tokenizer,
+)
 
 from paraplume.utils import get_device, get_logger
 

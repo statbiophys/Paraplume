@@ -84,7 +84,7 @@ paraplume-infer seq-to-paratope [OPTIONS]
 | `-l, --light-chain` | TEXT | - | Light chain amino acid sequence |
 | `--custom-model` | PATH | None | Path to custom trained model folder |
 | `--gpu` | INT | 0 | Choose index of GPU device to use if multiple GPUs available. By default it's the first one (index 0). -1 forces cpu usage. If no GPU is available, CPU is used |
-| `--large/--small` | flag | --large | Use default Paraplume which uses the 6 PLMs AbLang2,Antiberty,ESM,ProtT5,IgT5 and IgBert (--large) or the smallest version using only ESM-2 embeddings (--small) |
+| `--large/--small` | flag | --large | Use default Paraplume which uses the 5 PLMs Antiberty,ESM,ProtT5,IgT5 and IgBert (--large) or the smallest version using only ESM-2 embeddings (--small) |
 
 <details>
 <summary><h4>Examples</h4></summary>
@@ -135,10 +135,12 @@ paraplume-infer file-to-paratope [OPTIONS] FILE_PATH
 | `--gpu` | INT | 0 | Choose index of GPU device to use if multiple GPUs available. By default it's the first one (index 0). -1 forces cpu usage. If no GPU is available, CPU is used |
 | `--result-folder, -r` | PATH | None | Folder path where to save the results. If not passed the result is saved in the input data folder |
 | `--emb-proc-size` | INT | 100 | Embedding batch size for memory management |
-| `--compute-sequence-embeddings` | flag | False | Compute both paratope and classical sequence embeddings for each sequence and each of the 6 PLMs AbLang2, Antiberty, ESM, ProtT5, IgT5 and IgBert. Only possible when using the default trained_models/large |
+| `--compute-sequence-embeddings` | flag | False | Compute both paratope and classical sequence embeddings for each sequence and each of the 5 PLMs Antiberty, ESM, ProtT5, IgT5 and IgBert. Only possible when using the default trained_models/large |
 | `--single-chain` | flag | False | Process single chain sequences |
-| `--large/--small` | flag | --large | Use default Paraplume which uses the 6 PLMs AbLang2,Antiberty,ESM,ProtT5,IgT5 and IgBert (--large) or the smallest version using only ESM-2 embeddings (--small) |
+| `--large/--small` | flag | --large | Use default Paraplume which uses the 5 PLMs Antiberty,ESM,ProtT5,IgT5 and IgBert (--large) or the smallest version using only ESM-2 embeddings (--small) |
 │ `--compute-shap` | flag | False | Compute SHAP importance analysis and generate visualizations. A folder 'shap_results' will be created with a plot inside for each sequence.|
+│ `--nanobody` | flag | False | Use the weights trained on nanobody paratope prediction. Overrides --small/--large as well as --single-chain as only one nanobody model is available.  |
+
 
 
 
@@ -317,7 +319,6 @@ Path of **dict.json**: Dictionary file created by `paraplume-build-dictionary` w
 <summary><h4>Output</h4></summary>
 
 Creates multiple embedding files in the same folder as dict.json:
-- **ablang2_embeddings.pt**: AbLang2 model embeddings
 - **igbert_embeddings.pt**: IgBERT model embeddings
 - **igT5_embeddings.pt**: IgT5 model embeddings
 - **esm_embeddings.pt**: ESM model embeddings
@@ -359,7 +360,7 @@ paraplume-train [OPTIONS] TRAIN_FOLDER_PATH VAL_FOLDER_PATH
 | `--seed` | INTEGER | 0 | Seed to use for training |
 | `--l2-pen` | FLOAT | 0 | L2 penalty to use for the model weights |
 | `--patience` | INTEGER | 0 | Patience to use for early stopping. 0 means no early stopping |
-| `--emb-models` | TEXT | all | LLM embedding models to use, separated by commas. LLMs should be in 'ablang2','igbert','igT5','esm','antiberty','prot-t5','all'. Example 'igT5,esm' |
+| `--emb-models` | TEXT | all | LLM embedding models to use, separated by commas. LLMs should be in 'igbert','igT5','esm','antiberty','prot-t5','all'. Example 'igT5,esm' |
 | `--gpu` | INTEGER | 0 | Choose index of GPU device to use if multiple GPUs available. By default it's the first one (index 0). -1 forces cpu usage. If no GPU is available, CPU is used |
 
 <details>
@@ -434,7 +435,7 @@ paraplume-create-embeddings ./custom_folder/custom_train_set/dict.json \
   --emb-proc-size 50
 ```
 
-The folder `custom_folder` will be created. Inside this folder the folder `custom_train_set` is created in which there are two files, `dict.json` for the sequences and labels, and emebddings for each of the 6 PLM.
+The folder `custom_folder` will be created. Inside this folder the folder `custom_train_set` is created in which there are two files, `dict.json` for the sequences and labels, and emebddings for each of the 5 PLM.
 Repeat for the validation set (used for early stopping):
 ```bash
 paraplume-build-dictionary ./tutorial/custom_val_set.csv ./all_structures/imgt -r custom_folder
@@ -531,30 +532,6 @@ For detailed usage, expand the sections above! 👆
 - During the **first** inference, Paraplume will automatically download PLM weights inside your virtual environment. This step may take **10–15 minutes**, depending on connection and hardware.
 - This download only happens **once**. Future runs will start right away.
 - If the full model is too heavy for your system, try the **light version** by adding `--small`, which uses only ESM.
-
-<details>
-<summary><h2>Common Issues</h2></summary>
-
-#### AbLang2 Download Error
-
-If you encounter the following error:
-```
-CalledProcessError: Command '['tar', '-zxvf', 'YOURFOLDER/tmp.tar.gz',
-'-C', 'YOURFOLDER']' returned non-zero exit status 2.
-```
-
-This occurs because AbLang2 failed to download its model weights from the Zenodo server.
-
-**Fix:** Download the weights manually:
-```bash
-TARGET=YOURFOLDER
-mkdir -p "$TARGET"
-curl -L "https://zenodo.org/records/10185169/files/ablang2-weights.tar.gz" | tar -xz -C "$TARGET"
-```
-
-Replace `YOURFOLDER` with the actual path shown in your error message. After running these commands, Paraplume should work correctly.
-
-</details>
 
 # 📧 Contact
 
