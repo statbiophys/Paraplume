@@ -85,6 +85,7 @@ paraplume-infer seq-to-paratope [OPTIONS]
 | `--custom-model` | PATH | None | Path to custom trained model folder |
 | `--gpu` | INT | 0 | Choose index of GPU device to use if multiple GPUs available. By default it's the first one (index 0). -1 forces cpu usage. If no GPU is available, CPU is used |
 | `--large/--small` | flag | --large | Use default Paraplume which uses the 5 PLMs Antiberty,ESM,ProtT5,IgT5 and IgBert (--large) or the smallest version using only ESM-2 embeddings (--small) |
+│ `--nanobody` | flag | False | Use the weights trained on nanobody paratope prediction. Overrides --small/--large as well as --single-chain as only one nanobody model is available.  |
 
 <details>
 <summary><h4>Examples</h4></summary>
