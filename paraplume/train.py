@@ -208,7 +208,7 @@ def main(  # noqa: PLR0913
         "--emb-models",
         help=(
             "LLM embedding models to use, separated by commas. "
-            "LLMs should be in 'ablang2','igbert','igT5','esm','antiberty',prot-t5','all'. "
+            "LLMs should be in 'igbert','igT5','esm','antiberty',prot-t5','all'. "
             "Example 'igT5,esm'."
         ),
     ),
@@ -230,7 +230,7 @@ def main(  # noqa: PLR0913
     result_folder.mkdir(exist_ok=True, parents=True)
     log.info("PROCESSING ARGUMENTS", arguments="model_list,alphas,seed,dropouts,dims")
     if embedding_models == "all":
-        embedding_models = "ablang2,igbert,igT5,esm,antiberty,prot-t5"
+        embedding_models = "igbert,igT5,esm,antiberty,prot-t5"
     embedding_models_list = embedding_models.split(",")
     train_embeddings = torch.cat(
         [

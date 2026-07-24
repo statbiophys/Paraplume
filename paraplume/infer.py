@@ -11,7 +11,6 @@ import torch
 import typer
 
 from paraplume.create_embeddings import (
-    compute_ablang_embeddings,
     compute_antiberty_embeddings,
     compute_esm_embeddings,
     compute_igbert_embeddings,
@@ -32,7 +31,6 @@ warnings.filterwarnings("ignore")
 log = get_logger()
 
 llm_to_func = {
-    "ablang2": compute_ablang_embeddings,
     "igT5": compute_igt5_embeddings,
     "igbert": compute_igbert_embeddings,
     "esm": compute_esm_embeddings,
@@ -170,12 +168,13 @@ def predict_paratope(  # noqa: PLR0913,PLR0915
     custom_model: Path | None = None,
     gpu: int = 0,
     emb_proc_size: int = 100,
+    shap_output_dir: Path = Path("./shap_results/"),
     *,
     compute_sequence_embeddings: bool = False,
     single_chain: bool = False,
     large: bool = True,
     compute_shap: bool = False,
-    shap_output_dir: Path = Path("./shap_results/"),
+    nanobody: bool = False
 ) -> pd.DataFrame:
     """Predict the paratope for sequences in dataframe df.
 
@@ -205,7 +204,10 @@ def predict_paratope(  # noqa: PLR0913,PLR0915
     """
     device = get_device(gpu)
     if not custom_model:
-        subfolder = "large_1_0" if large else "small_1_0"
+        if nanobody:
+            subfolder = "nanobody"
+        else:
+            subfolder = "large_1_0" if large else "small_1_0"
         with resources.as_file(
             resources.files("paraplume.trained_models") / subfolder
         ) as model_path:
@@ -231,7 +233,7 @@ def predict_paratope(  # noqa: PLR0913,PLR0915
 
     llm_models = summary_dict["embedding_models"]
     if llm_models == "all":
-        llm_models = "ablang2,igbert,igT5,esm,antiberty,prot-t5"
+        llm_models = "igbert,igT5,esm,antiberty,prot-t5"
     llm_list = llm_models.split(",")
 
     df["sequence_heavy"] = df["sequence_heavy"].fillna("")
@@ -387,7 +389,7 @@ def file_to_paratope(  # noqa: PLR0913
         False,  # noqa: FBT003
         "--compute-sequence-embeddings",
         help="Compute both paratope and classical sequence embeddings for each sequence "
-        "and each of the 6 PLMs AbLang2, Antiberty, ESM, ProtT5, IgT5 and IgBert. "
+        "and each of the 5 PLMs Antiberty, ESM, ProtT5, IgT5 and IgBert. "
         "Only possible when using the default trained_models/large.",
     ),
     single_chain: bool = typer.Option(  # noqa: FBT001
@@ -395,10 +397,15 @@ def file_to_paratope(  # noqa: PLR0913
         "--single-chain",
         help="Infer paratope on single chain data. Default to False.",
     ),
+    nanobody: bool = typer.Option(  # noqa: FBT001
+        False,  # noqa: FBT003
+        "--nanobody",
+        help="Infer paratope on nanobodies. Default to False.",
+    ),
     large: bool = typer.Option(  # noqa: FBT001
         True,  # noqa: FBT003
         "--large/--small",
-        help="Use default Paraplume which uses the 6 PLMs AbLang2,Antiberty,ESM,ProtT5,IgT5 and "
+        help="Use default Paraplume which uses the 5 PLMs Antiberty,ESM,ProtT5,IgT5 and "
         "IgBert (--large) or the smallest version using only ESM-2 embeddings (--small).",
     ),
     compute_shap: bool = typer.Option(  # noqa: FBT001
@@ -410,7 +417,8 @@ def file_to_paratope(  # noqa: PLR0913
 ) -> pd.DataFrame:
     """Predict paratope from sequence."""
     df = pd.read_csv(file_path)
-
+    if nanobody:
+        single_chain=True
     # Set up SHAP output directory
     shap_output_dir = file_path.parent / Path("shap_results")
     if compute_shap:
@@ -426,6 +434,7 @@ def file_to_paratope(  # noqa: PLR0913
         large=large,
         compute_shap=compute_shap,
         shap_output_dir=shap_output_dir,
+        nanobody=nanobody,
     )
 
     if result_path is None:
@@ -445,6 +454,7 @@ def predict_paratope_seq(  # noqa: PLR0913
     *,
     large: bool = True,
     single_chain: bool = False,
+    nanobody:bool=False,
 ) -> tuple:
     """Predict paratope given two sequence chains.
 
@@ -463,7 +473,10 @@ def predict_paratope_seq(  # noqa: PLR0913
     """
     device = get_device(gpu)
     if not custom_model:
-        subfolder = "large_1_0" if large else "small_1_0"
+        if nanobody:
+            subfolder="nanobody"
+        else:
+            subfolder = "large_1_0" if large else "small_1_0"
         with resources.as_file(
             resources.files("paraplume.trained_models") / subfolder
         ) as model_path:
@@ -487,7 +500,7 @@ def predict_paratope_seq(  # noqa: PLR0913
 
     llm_models = summary_dict["embedding_models"]
     if llm_models == "all":
-        llm_models = "ablang2,igbert,igT5,esm,antiberty,prot-t5"
+        llm_models = "igbert,igT5,esm,antiberty,prot-t5"
     llm_list = llm_models.split(",")
 
     seq_emb_list = []
@@ -534,11 +547,18 @@ def seq_to_paratope(
     large: bool = typer.Option(  # noqa: FBT001
         True,  # noqa: FBT003
         "--large/--small",
-        help="Use default Paraplume which uses the 6 PLMs AbLang2,Antiberty,ESM,ProtT5,IgT5 and "
+        help="Use default Paraplume which uses the 5 PLMs Antiberty,ESM,ProtT5,IgT5 and "
         "IgBert (--large) or the smallest version using only ESM-2 embeddings (--small).",
+    ),
+    nanobody: bool = typer.Option(  # noqa: FBT001
+        False,  # noqa: FBT003
+        "--nanobody",
+        help="Infer paratope on nanobodies. Default to False.",
     ),
 ) -> None:
     """Predict paratope from sequence."""
+    if nanobody:
+        single_chain=True
     single_chain = (sequence_heavy is None) or (sequence_light is None)
     output_heavy, output_light = predict_paratope_seq(
         sequence_heavy=sequence_heavy,
