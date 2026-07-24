@@ -268,8 +268,8 @@ def predict_paratope(  # noqa: PLR0913,PLR0915
     for i, emb in enumerate(embedding_list):
         # Forward pass → shape: (Ni,)
         preds = model(emb).cpu().detach().numpy().flatten()
-        heavy_outputs.append(preds[: heavy_lens[i]])
-        light_outputs.append(preds[heavy_lens[i] : heavy_lens[i] + light_lens[i]])
+        heavy_outputs.append(preds[: heavy_lens[i]].tolist())
+        light_outputs.append(preds[heavy_lens[i] : heavy_lens[i] + light_lens[i]].tolist())
 
     df["model_prediction_heavy"] = heavy_outputs
     df["model_prediction_light"] = light_outputs
